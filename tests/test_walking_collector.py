@@ -1,6 +1,11 @@
 import numpy as np
 
-from Numba_Engine import BASE_GAME_CONFIG, REEL_DICT, ReelCollections
+from Numba_Engine import (
+    BASE_GAME_CONFIG,
+    JACKPOT_CONFIG,
+    REEL_DICT,
+    ReelCollections,
+)
 from Numba_Engine.core.config import PAY_LINES
 from Numba_Engine.core.storage import Storage
 from Numba_Engine.simulations.base_game import (
@@ -24,6 +29,7 @@ def _new_storage():
         BASE_GAME_CONFIG.num_reels,
         BASE_GAME_CONFIG.num_paying_symbols,
         len(PAY_LINES),
+        len(JACKPOT_CONFIG.jackpot_types),
     )
 
 
@@ -52,6 +58,7 @@ def test_round_without_collectors_is_exactly_one_paid_spin():
         reels,
         BASE_GAME_CONFIG,
         _new_storage(),
+        JACKPOT_CONFIG.seed_values.copy(),
     )
 
     assert total_win >= 0
@@ -74,6 +81,7 @@ def test_collector_on_final_reel_collects_then_exits_without_extra_spin():
         reels,
         BASE_GAME_CONFIG,
         _new_storage(),
+        JACKPOT_CONFIG.seed_values.copy(),
     )
 
     assert total_win > 0

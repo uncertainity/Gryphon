@@ -114,6 +114,7 @@ def _new_storage(num_sessions, rules):
         max(1, num_sessions),
         rules.num_rows,
         rules.num_reels,
+        len(rules.jackpot_collection_targets),
     )
 
 

@@ -240,6 +240,89 @@ def collect_active_coin_positions(coin_mask, locked_row_idx, num_reels):
 
 
 @njit
+def _select_unawarded_jackpot_type(type_probabilities, awarded_jackpots):
+    """Select a weighted jackpot type, excluding already-awarded types."""
+    available_weight = 0.0
+    for jackpot_type in range(len(type_probabilities)):
+        if not awarded_jackpots[jackpot_type]:
+            available_weight += type_probabilities[jackpot_type]
+
+    if available_weight <= 0.0:
+        return -1
+
+    choice = np.random.uniform(0.0, available_weight)
+    cumulative_weight = 0.0
+    for jackpot_type in range(len(type_probabilities)):
+        if awarded_jackpots[jackpot_type]:
+            continue
+        cumulative_weight += type_probabilities[jackpot_type]
+        if choice < cumulative_weight:
+            return jackpot_type
+
+    return -1
+
+
+@njit
+def collect_free_game_jackpot_tokens(
+    pay_window,
+    landed_coin_positions,
+    locked_row_idx,
+    rules,
+    jackpot_meters,
+    awarded_jackpots,
+):
+    """Generate and collect ephemeral tokens on newly landed visible QHs."""
+    num_reels = pay_window.shape[1]
+    overlay_window = np.full(pay_window.shape, -1, dtype=np.int8)
+    meters_before = jackpot_meters.copy()
+    newly_awarded = np.zeros(len(jackpot_meters), dtype=np.bool_)
+
+    eligible_positions = np.empty(len(landed_coin_positions), dtype=np.int32)
+    eligible_count = 0
+    for position in landed_coin_positions:
+        if position // num_reels > locked_row_idx:
+            eligible_positions[eligible_count] = position
+            eligible_count += 1
+
+    token_count = 0
+    for candidate_index in range(eligible_count):
+        swap_index = np.random.randint(candidate_index, eligible_count)
+        position = eligible_positions[swap_index]
+        eligible_positions[swap_index] = eligible_positions[candidate_index]
+        eligible_positions[candidate_index] = position
+
+        if token_count >= rules.max_jackpot_tokens_per_respin:
+            break
+        if np.random.uniform(0.0, 1.0) >= rules.jackpot_token_probability:
+            continue
+
+        jackpot_type = _select_unawarded_jackpot_type(
+            rules.jackpot_type_probabilities,
+            awarded_jackpots,
+        )
+        if jackpot_type < 0:
+            break
+
+        row = position // num_reels
+        col = position % num_reels
+        overlay_window[row, col] = jackpot_type
+        jackpot_meters[jackpot_type] += 1
+        token_count += 1
+
+        if (
+            jackpot_meters[jackpot_type]
+            >= rules.jackpot_collection_targets[jackpot_type]
+        ):
+            jackpot_meters[jackpot_type] = (
+                rules.jackpot_collection_targets[jackpot_type]
+            )
+            awarded_jackpots[jackpot_type] = True
+            newly_awarded[jackpot_type] = True
+
+    return overlay_window, meters_before, newly_awarded
+
+
+@njit
 def collect_bag_positions(pay_window, coin_mask, bag_symbols):
     """Group all bag-symbol positions by bag index in one board walk."""
     num_rows, num_reels = pay_window.shape
@@ -297,6 +380,8 @@ class HoldAndSpinResult(NamedTuple):
     collector_meter: int
     locked_row_idx: int
     total_spins: int
+    jackpot_meters: np.ndarray
+    awarded_jackpots: np.ndarray
 
 
 @njit
@@ -349,6 +434,14 @@ def hold_and_spin(
     collector_meter = 0
     collector_events_used = 0
     total_spins = 0
+    jackpot_meters = np.zeros(
+        len(rules.jackpot_collection_targets),
+        dtype=np.int16,
+    )
+    awarded_jackpots = np.zeros(
+        len(rules.jackpot_collection_targets),
+        dtype=np.bool_,
+    )
     storage.begin_session(starting_bag_symbols)
 
     while remaining_spins > 0:
@@ -394,6 +487,25 @@ def hold_and_spin(
                         else:
                             pay_window[row, col] = coin_type
                             coin_mask[position] = False
+
+        (
+            jackpot_overlay_window,
+            jackpot_meters_before,
+            newly_awarded_jackpots,
+        ) = collect_free_game_jackpot_tokens(
+            pay_window,
+            landed_coin_positions[:num_landed_coins],
+            locked_row_idx,
+            rules,
+            jackpot_meters,
+            awarded_jackpots,
+        )
+        storage.save_jackpot_respin(
+            jackpot_overlay_window,
+            jackpot_meters_before,
+            jackpot_meters,
+            newly_awarded_jackpots,
+        )
 
         storage.save_step(
             pay_window,
@@ -654,6 +766,8 @@ def hold_and_spin(
         float(coin_win + collector_meter),
         float(coin_win),
         float(collector_meter),
+        jackpot_meters,
+        awarded_jackpots,
     )
 
     return HoldAndSpinResult(
@@ -662,6 +776,8 @@ def hold_and_spin(
         collector_meter,
         locked_row_idx,
         total_spins,
+        jackpot_meters,
+        awarded_jackpots,
     )
 
 

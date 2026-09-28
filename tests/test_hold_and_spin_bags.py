@@ -4,6 +4,7 @@ from Numba_Engine import (
     HOLD_AND_SPIN_CONFIG,
     booster_bag,
     collect_bag_positions,
+    collect_free_game_jackpot_tokens,
     collector_bag,
     expansion_bag,
     grower_bag,
@@ -20,6 +21,7 @@ def _new_hold_and_spin_storage(config):
         1,
         config.num_rows,
         config.num_reels,
+        len(config.jackpot_collection_targets),
     )
 
 
@@ -69,6 +71,68 @@ def test_bag_probability_tables_favor_lower_rtp_outcomes():
         config.bag_symbol_actions,
         np.array([2, 0, 1, 1, 1, 2]),
     )
+    np.testing.assert_array_equal(
+        config.jackpot_collection_targets,
+        np.array([3, 3, 3, 3]),
+    )
+    assert config.max_jackpot_tokens_per_respin == 1
+    assert np.isclose(config.jackpot_type_probabilities.sum(), 1.0)
+
+
+def test_jackpot_token_overlay_collects_matching_session_meter():
+    config = HOLD_AND_SPIN_CONFIG._replace(
+        jackpot_token_probability=1.0,
+        jackpot_type_probabilities=np.array([1.0, 0.0, 0.0, 0.0]),
+        jackpot_collection_targets=np.array([2, 3, 3, 3], dtype=np.int16),
+        max_jackpot_tokens_per_respin=1,
+    )
+    board = np.zeros((config.num_rows, config.num_reels), dtype=np.int16)
+    board[3, 0] = 5
+    board[3, 1] = 10
+    landed_positions = np.array([15, 16], dtype=np.int32)
+    meters = np.array([1, 0, 0, 0], dtype=np.int16)
+    awarded = np.zeros(4, dtype=np.bool_)
+
+    overlay, meters_before, newly_awarded = (
+        collect_free_game_jackpot_tokens(
+            board,
+            landed_positions,
+            locked_row_idx=2,
+            rules=config,
+            jackpot_meters=meters,
+            awarded_jackpots=awarded,
+        )
+    )
+
+    assert np.count_nonzero(overlay >= 0) == 1
+    assert overlay[overlay >= 0][0] == 0
+    np.testing.assert_array_equal(meters_before, np.array([1, 0, 0, 0]))
+    np.testing.assert_array_equal(meters, np.array([2, 0, 0, 0]))
+    np.testing.assert_array_equal(newly_awarded, np.array([True] + [False] * 3))
+    np.testing.assert_array_equal(awarded, np.array([True] + [False] * 3))
+
+
+def test_jackpot_token_overlay_ignores_new_qhs_in_locked_rows():
+    config = HOLD_AND_SPIN_CONFIG._replace(
+        jackpot_token_probability=1.0,
+    )
+    board = np.zeros((config.num_rows, config.num_reels), dtype=np.int16)
+    board[1, 0] = 5
+    meters = np.zeros(4, dtype=np.int16)
+    awarded = np.zeros(4, dtype=np.bool_)
+
+    overlay, _, newly_awarded = collect_free_game_jackpot_tokens(
+        board,
+        np.array([5], dtype=np.int32),
+        locked_row_idx=2,
+        rules=config,
+        jackpot_meters=meters,
+        awarded_jackpots=awarded,
+    )
+
+    assert np.all(overlay == -1)
+    assert not np.any(meters)
+    assert not np.any(newly_awarded)
 
 
 def test_grower_selects_unique_coins_and_applies_weighted_increment():

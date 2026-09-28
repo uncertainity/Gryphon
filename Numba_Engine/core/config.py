@@ -9,6 +9,49 @@ from .reels import REEL_DICT
 _REELS_ROOT = Path(__file__).resolve().parents[2] / "Reels"
 
 
+class JackpotConfig(NamedTuple):
+    """Shared monetary rules for the four progressive jackpots."""
+
+    jackpot_types: np.ndarray
+    seed_values: np.ndarray
+    increment_values: np.ndarray
+    cap_multiplier: float
+
+
+class BaseJackpotOverlayConfig(NamedTuple):
+    """Rules for generating jackpot overlays on a base-game window."""
+
+    count_values: np.ndarray
+    count_probabilities: np.ndarray
+    jackpot_type_probabilities: np.ndarray
+    eligible_symbols: np.ndarray
+
+
+JACKPOT_CONFIG = JackpotConfig(
+    jackpot_types=np.arange(4, dtype=np.int8),
+    # Placeholder x-bet values. These are intentionally isolated here so the
+    # final math settings can replace them without changing the game logic.
+    seed_values=np.array([2.0, 10.0, 100.0, 10_000.0], dtype=np.float64),
+    increment_values=np.array([0.1, 0.5, 5.0, 50.0], dtype=np.float64),
+    cap_multiplier=2.0,
+)
+
+
+BASE_JACKPOT_OVERLAY_CONFIG = BaseJackpotOverlayConfig(
+    # Both the available counts and their weights are tuning variables. The
+    # current 0-4 range and probabilities are placeholders.
+    count_values=np.array([0, 1, 2, 3, 4], dtype=np.int8),
+    count_probabilities=np.array(
+        [0.70, 0.20, 0.07, 0.02, 0.01],
+        dtype=np.float64,
+    ),
+    jackpot_type_probabilities=np.full(4, 0.25, dtype=np.float64),
+    # Paying symbols H1-L6 plus Wild. Coin/Collect/feature symbols are not
+    # eligible because the jackpot is an overlay, not a replacement symbol.
+    eligible_symbols=np.arange(12, dtype=np.int16),
+)
+
+
 class BaseGameConfig(NamedTuple):
     reelset_path: str
     reelset_probabilities: np.ndarray
@@ -118,6 +161,10 @@ class HoldAndSpinConfig(NamedTuple):
     multiplier_probabilities: np.ndarray
     max_collector_events: int
     rows_unlocked_per_expansion: int
+    jackpot_token_probability: float
+    jackpot_type_probabilities: np.ndarray
+    jackpot_collection_targets: np.ndarray
+    max_jackpot_tokens_per_respin: int
 
 
 HOLD_AND_SPIN_CONFIG = HoldAndSpinConfig(
@@ -212,6 +259,29 @@ HOLD_AND_SPIN_CONFIG = HoldAndSpinConfig(
     ),
     max_collector_events=3,
     rows_unlocked_per_expansion=1,
+    # Placeholder free-game jackpot-token settings. Tokens attach only to
+    # naturally landed, visible QHs and do not alter their credit values.
+    jackpot_token_probability=0.16,
+    jackpot_type_probabilities=np.full(4, 0.25, dtype=np.float64),
+    jackpot_collection_targets=np.full(4, 3, dtype=np.int16),
+    max_jackpot_tokens_per_respin=1,
+)
+
+
+class FullGameConfig(NamedTuple):
+    """Composition of the independently tunable full-game rule sets."""
+
+    base_game: BaseGameConfig
+    base_jackpot_overlay: BaseJackpotOverlayConfig
+    free_game: HoldAndSpinConfig
+    jackpots: JackpotConfig
+
+
+FULL_GAME_CONFIG = FullGameConfig(
+    base_game=BASE_GAME_CONFIG,
+    base_jackpot_overlay=BASE_JACKPOT_OVERLAY_CONFIG,
+    free_game=HOLD_AND_SPIN_CONFIG,
+    jackpots=JACKPOT_CONFIG,
 )
 
 

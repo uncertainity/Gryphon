@@ -14,6 +14,10 @@ NPZ_FORMAT_VERSION = 1
 _NPZ_ARRAY_KEYS = (
     "boards",
     "coin_value_boards",
+    "jackpot_overlay_boards",
+    "jackpot_values_before",
+    "jackpot_values_after",
+    "jackpot_increment_counts",
     "wins",
     "line_wins",
     "collect_wins",
@@ -33,6 +37,10 @@ _NPZ_ARRAY_KEYS = (
 _SPIN_ARRAY_KEYS = (
     "boards",
     "coin_value_boards",
+    "jackpot_overlay_boards",
+    "jackpot_values_before",
+    "jackpot_values_after",
+    "jackpot_increment_counts",
     "wins",
     "line_wins",
     "collect_wins",
@@ -56,6 +64,10 @@ storage_spec = [
     # One entry for every paid spin (one Collector-loop iteration).
     ("boards", int16[:, :, :]),
     ("coin_value_boards", int16[:, :, :]),
+    ("jackpot_overlay_boards", int8[:, :, :]),
+    ("jackpot_values_before", float64[:, :]),
+    ("jackpot_values_after", float64[:, :]),
+    ("jackpot_increment_counts", int16[:, :]),
     ("wins", float64[:]),
     ("line_wins", float64[:]),
     ("collect_wins", float64[:]),
@@ -93,13 +105,14 @@ class Storage:
         num_reels,
         num_symbols,
         num_lines,
+        num_jackpots,
     ):
         if spin_capacity < 1:
             raise ValueError("Storage capacity must be positive")
         if num_rows < 1 or num_reels < 1:
             raise ValueError("Board dimensions must be positive")
-        if num_symbols < 1 or num_lines < 1:
-            raise ValueError("Symbol and line counts must be positive")
+        if num_symbols < 1 or num_lines < 1 or num_jackpots < 1:
+            raise ValueError("Symbol, line and jackpot counts must be positive")
 
         self.boards = np.empty(
             (spin_capacity, num_rows, num_reels),
@@ -107,6 +120,23 @@ class Storage:
         )
         self.coin_value_boards = np.empty(
             (spin_capacity, num_rows, num_reels),
+            dtype=np.int16,
+        )
+        self.jackpot_overlay_boards = np.full(
+            (spin_capacity, num_rows, num_reels),
+            -1,
+            dtype=np.int8,
+        )
+        self.jackpot_values_before = np.empty(
+            (spin_capacity, num_jackpots),
+            dtype=np.float64,
+        )
+        self.jackpot_values_after = np.empty(
+            (spin_capacity, num_jackpots),
+            dtype=np.float64,
+        )
+        self.jackpot_increment_counts = np.zeros(
+            (spin_capacity, num_jackpots),
             dtype=np.int16,
         )
         self.wins = np.empty(spin_capacity, dtype=np.float64)
@@ -164,6 +194,7 @@ class Storage:
         num_reels = self.boards.shape[2]
         num_symbols = self.symbol_wins.shape[1]
         num_lines = self.winning_line_numbers.shape[1]
+        num_jackpots = self.jackpot_values_before.shape[1]
         count = self.spin_count
 
         boards = np.empty(
@@ -172,6 +203,23 @@ class Storage:
         )
         coin_value_boards = np.empty(
             (new_capacity, num_rows, num_reels),
+            dtype=np.int16,
+        )
+        jackpot_overlay_boards = np.full(
+            (new_capacity, num_rows, num_reels),
+            -1,
+            dtype=np.int8,
+        )
+        jackpot_values_before = np.empty(
+            (new_capacity, num_jackpots),
+            dtype=np.float64,
+        )
+        jackpot_values_after = np.empty(
+            (new_capacity, num_jackpots),
+            dtype=np.float64,
+        )
+        jackpot_increment_counts = np.zeros(
+            (new_capacity, num_jackpots),
             dtype=np.int16,
         )
         wins = np.empty(new_capacity, dtype=np.float64)
@@ -209,6 +257,10 @@ class Storage:
 
         boards[:count] = self.boards[:count]
         coin_value_boards[:count] = self.coin_value_boards[:count]
+        jackpot_overlay_boards[:count] = self.jackpot_overlay_boards[:count]
+        jackpot_values_before[:count] = self.jackpot_values_before[:count]
+        jackpot_values_after[:count] = self.jackpot_values_after[:count]
+        jackpot_increment_counts[:count] = self.jackpot_increment_counts[:count]
         wins[:count] = self.wins[:count]
         line_wins[:count] = self.line_wins[:count]
         collect_wins[:count] = self.collect_wins[:count]
@@ -223,6 +275,10 @@ class Storage:
 
         self.boards = boards
         self.coin_value_boards = coin_value_boards
+        self.jackpot_overlay_boards = jackpot_overlay_boards
+        self.jackpot_values_before = jackpot_values_before
+        self.jackpot_values_after = jackpot_values_after
+        self.jackpot_increment_counts = jackpot_increment_counts
         self.wins = wins
         self.line_wins = line_wins
         self.collect_wins = collect_wins
@@ -268,6 +324,10 @@ class Storage:
         self,
         board,
         coin_value_board,
+        jackpot_overlay_board,
+        jackpot_values_before,
+        jackpot_values_after,
+        jackpot_increment_counts,
         line_win,
         collect_win,
         symbol_wins,
@@ -284,6 +344,10 @@ class Storage:
         index = self.spin_count
         self.boards[index] = board
         self.coin_value_boards[index] = coin_value_board
+        self.jackpot_overlay_boards[index] = jackpot_overlay_board
+        self.jackpot_values_before[index] = jackpot_values_before
+        self.jackpot_values_after[index] = jackpot_values_after
+        self.jackpot_increment_counts[index] = jackpot_increment_counts
         self.line_wins[index] = line_win
         self.collect_wins[index] = collect_win
         self.wins[index] = line_win + collect_win
@@ -317,6 +381,183 @@ class Storage:
         self.spin_count += 1
 
 
+full_game_storage_spec = [
+    ("spin_feature_session_indices", int64[:]),
+    ("spin_base_wins", float64[:]),
+    ("spin_feature_wins", float64[:]),
+    ("spin_jackpot_wins", float64[:]),
+    ("spin_total_wins", float64[:]),
+    ("spin_jackpot_values_before_feature", float64[:, :]),
+    ("spin_jackpot_awards", boolean[:, :]),
+    ("spin_jackpot_award_amounts", float64[:, :]),
+    ("spin_jackpot_values_after_feature", float64[:, :]),
+    ("round_spin_offsets", int64[:]),
+    ("round_base_wins", float64[:]),
+    ("round_feature_wins", float64[:]),
+    ("round_jackpot_wins", float64[:]),
+    ("round_total_wins", float64[:]),
+    ("spin_count", int64),
+    ("round_count", int64),
+]
+
+
+@jitclass(full_game_storage_spec)
+class FullGameStorage:
+    """Integration storage linking paid base spins to feature sessions."""
+
+    def __init__(self, spin_capacity, round_capacity, num_jackpots):
+        if spin_capacity < 1 or round_capacity < 1:
+            raise ValueError("Full-game capacities must be positive")
+        if num_jackpots < 1:
+            raise ValueError("Jackpot count must be positive")
+
+        self.spin_feature_session_indices = np.full(
+            spin_capacity,
+            -1,
+            dtype=np.int64,
+        )
+        self.spin_base_wins = np.empty(spin_capacity, dtype=np.float64)
+        self.spin_feature_wins = np.empty(spin_capacity, dtype=np.float64)
+        self.spin_jackpot_wins = np.empty(spin_capacity, dtype=np.float64)
+        self.spin_total_wins = np.empty(spin_capacity, dtype=np.float64)
+        self.spin_jackpot_values_before_feature = np.empty(
+            (spin_capacity, num_jackpots),
+            dtype=np.float64,
+        )
+        self.spin_jackpot_awards = np.zeros(
+            (spin_capacity, num_jackpots),
+            dtype=np.bool_,
+        )
+        self.spin_jackpot_award_amounts = np.zeros(
+            (spin_capacity, num_jackpots),
+            dtype=np.float64,
+        )
+        self.spin_jackpot_values_after_feature = np.empty(
+            (spin_capacity, num_jackpots),
+            dtype=np.float64,
+        )
+
+        self.round_spin_offsets = np.empty(round_capacity + 1, dtype=np.int64)
+        self.round_base_wins = np.empty(round_capacity, dtype=np.float64)
+        self.round_feature_wins = np.empty(round_capacity, dtype=np.float64)
+        self.round_jackpot_wins = np.empty(round_capacity, dtype=np.float64)
+        self.round_total_wins = np.empty(round_capacity, dtype=np.float64)
+        self.spin_count = 0
+        self.round_count = 0
+        self.round_spin_offsets[0] = 0
+
+    def _grow_spins(self):
+        old_capacity = self.spin_base_wins.shape[0]
+        new_capacity = old_capacity * 2
+        num_jackpots = self.spin_jackpot_awards.shape[1]
+        count = self.spin_count
+
+        feature_indices = np.full(new_capacity, -1, dtype=np.int64)
+        base_wins = np.empty(new_capacity, dtype=np.float64)
+        feature_wins = np.empty(new_capacity, dtype=np.float64)
+        jackpot_wins = np.empty(new_capacity, dtype=np.float64)
+        total_wins = np.empty(new_capacity, dtype=np.float64)
+        values_before = np.empty(
+            (new_capacity, num_jackpots),
+            dtype=np.float64,
+        )
+        awards = np.zeros(
+            (new_capacity, num_jackpots),
+            dtype=np.bool_,
+        )
+        award_amounts = np.zeros(
+            (new_capacity, num_jackpots),
+            dtype=np.float64,
+        )
+        values_after = np.empty(
+            (new_capacity, num_jackpots),
+            dtype=np.float64,
+        )
+
+        feature_indices[:count] = self.spin_feature_session_indices[:count]
+        base_wins[:count] = self.spin_base_wins[:count]
+        feature_wins[:count] = self.spin_feature_wins[:count]
+        jackpot_wins[:count] = self.spin_jackpot_wins[:count]
+        total_wins[:count] = self.spin_total_wins[:count]
+        values_before[:count] = self.spin_jackpot_values_before_feature[:count]
+        awards[:count] = self.spin_jackpot_awards[:count]
+        award_amounts[:count] = self.spin_jackpot_award_amounts[:count]
+        values_after[:count] = self.spin_jackpot_values_after_feature[:count]
+
+        self.spin_feature_session_indices = feature_indices
+        self.spin_base_wins = base_wins
+        self.spin_feature_wins = feature_wins
+        self.spin_jackpot_wins = jackpot_wins
+        self.spin_total_wins = total_wins
+        self.spin_jackpot_values_before_feature = values_before
+        self.spin_jackpot_awards = awards
+        self.spin_jackpot_award_amounts = award_amounts
+        self.spin_jackpot_values_after_feature = values_after
+
+    def _grow_rounds(self):
+        old_capacity = self.round_base_wins.shape[0]
+        new_capacity = old_capacity * 2
+        count = self.round_count
+        offsets = np.empty(new_capacity + 1, dtype=np.int64)
+        base_wins = np.empty(new_capacity, dtype=np.float64)
+        feature_wins = np.empty(new_capacity, dtype=np.float64)
+        jackpot_wins = np.empty(new_capacity, dtype=np.float64)
+        total_wins = np.empty(new_capacity, dtype=np.float64)
+        offsets[:count + 1] = self.round_spin_offsets[:count + 1]
+        base_wins[:count] = self.round_base_wins[:count]
+        feature_wins[:count] = self.round_feature_wins[:count]
+        jackpot_wins[:count] = self.round_jackpot_wins[:count]
+        total_wins[:count] = self.round_total_wins[:count]
+        self.round_spin_offsets = offsets
+        self.round_base_wins = base_wins
+        self.round_feature_wins = feature_wins
+        self.round_jackpot_wins = jackpot_wins
+        self.round_total_wins = total_wins
+
+    def begin_round(self):
+        if self.round_count == self.round_base_wins.shape[0]:
+            self._grow_rounds()
+        self.round_spin_offsets[self.round_count] = self.spin_count
+
+    def save_spin(
+        self,
+        feature_session_index,
+        base_win,
+        feature_win,
+        jackpot_win,
+        jackpot_values_before_feature,
+        jackpot_awards,
+        jackpot_award_amounts,
+        jackpot_values_after_feature,
+    ):
+        if self.spin_count == self.spin_base_wins.shape[0]:
+            self._grow_spins()
+        index = self.spin_count
+        self.spin_feature_session_indices[index] = feature_session_index
+        self.spin_base_wins[index] = base_win
+        self.spin_feature_wins[index] = feature_win
+        self.spin_jackpot_wins[index] = jackpot_win
+        self.spin_total_wins[index] = base_win + feature_win + jackpot_win
+        self.spin_jackpot_values_before_feature[index] = (
+            jackpot_values_before_feature
+        )
+        self.spin_jackpot_awards[index] = jackpot_awards
+        self.spin_jackpot_award_amounts[index] = jackpot_award_amounts
+        self.spin_jackpot_values_after_feature[index] = (
+            jackpot_values_after_feature
+        )
+        self.spin_count += 1
+
+    def finish_round(self, base_win, feature_win, jackpot_win):
+        index = self.round_count
+        self.round_base_wins[index] = base_win
+        self.round_feature_wins[index] = feature_win
+        self.round_jackpot_wins[index] = jackpot_win
+        self.round_total_wins[index] = base_win + feature_win + jackpot_win
+        self.round_count += 1
+        self.round_spin_offsets[self.round_count] = self.spin_count
+
+
 hold_and_spin_storage_spec = [
     # One entry for every stored state inside a respin.
     ("boards", int16[:, :, :]),
@@ -332,6 +573,10 @@ hold_and_spin_storage_spec = [
     ("respin_remaining_before", int16[:]),
     ("respin_remaining_after", int16[:]),
     ("respin_reset_flags", boolean[:]),
+    ("respin_jackpot_overlay_boards", int8[:, :, :]),
+    ("respin_jackpot_meters_before", int16[:, :]),
+    ("respin_jackpot_meters_after", int16[:, :]),
+    ("respin_jackpot_awards", boolean[:, :]),
 
     # Session -> respin mapping and final feature outcomes.
     ("session_respin_offsets", int64[:]),
@@ -341,6 +586,8 @@ hold_and_spin_storage_spec = [
     ("session_total_respins", int64[:]),
     ("session_starting_symbols", int16[:, :]),
     ("session_starting_symbol_counts", int16[:]),
+    ("session_jackpot_meters", int16[:, :]),
+    ("session_jackpot_awards", boolean[:, :]),
 
     ("step_count", int64),
     ("respin_count", int64),
@@ -365,6 +612,7 @@ class HoldAndSpinStorage:
         session_capacity,
         num_rows,
         num_reels,
+        num_jackpots,
     ):
         if step_capacity < 1:
             raise ValueError("Step capacity must be positive")
@@ -374,6 +622,8 @@ class HoldAndSpinStorage:
             raise ValueError("Session capacity must be positive")
         if num_rows < 1 or num_reels < 1:
             raise ValueError("Board dimensions must be positive")
+        if num_jackpots < 1:
+            raise ValueError("Jackpot count must be positive")
 
         self.boards = np.empty(
             (step_capacity, num_rows, num_reels),
@@ -405,6 +655,23 @@ class HoldAndSpinStorage:
             respin_capacity,
             dtype=np.bool_,
         )
+        self.respin_jackpot_overlay_boards = np.full(
+            (respin_capacity, num_rows, num_reels),
+            -1,
+            dtype=np.int8,
+        )
+        self.respin_jackpot_meters_before = np.zeros(
+            (respin_capacity, num_jackpots),
+            dtype=np.int16,
+        )
+        self.respin_jackpot_meters_after = np.zeros(
+            (respin_capacity, num_jackpots),
+            dtype=np.int16,
+        )
+        self.respin_jackpot_awards = np.zeros(
+            (respin_capacity, num_jackpots),
+            dtype=np.bool_,
+        )
 
         max_starting_symbols = num_rows * num_reels
         self.session_respin_offsets = np.empty(
@@ -432,6 +699,14 @@ class HoldAndSpinStorage:
         self.session_starting_symbol_counts = np.empty(
             session_capacity,
             dtype=np.int16,
+        )
+        self.session_jackpot_meters = np.zeros(
+            (session_capacity, num_jackpots),
+            dtype=np.int16,
+        )
+        self.session_jackpot_awards = np.zeros(
+            (session_capacity, num_jackpots),
+            dtype=np.bool_,
         )
 
         self.step_count = 0
@@ -486,21 +761,56 @@ class HoldAndSpinStorage:
         respin_remaining_before = np.empty(new_capacity, dtype=np.int16)
         respin_remaining_after = np.empty(new_capacity, dtype=np.int16)
         respin_reset_flags = np.empty(new_capacity, dtype=np.bool_)
+        num_rows = self.respin_jackpot_overlay_boards.shape[1]
+        num_reels = self.respin_jackpot_overlay_boards.shape[2]
+        num_jackpots = self.respin_jackpot_meters_before.shape[1]
+        respin_jackpot_overlay_boards = np.full(
+            (new_capacity, num_rows, num_reels),
+            -1,
+            dtype=np.int8,
+        )
+        respin_jackpot_meters_before = np.zeros(
+            (new_capacity, num_jackpots),
+            dtype=np.int16,
+        )
+        respin_jackpot_meters_after = np.zeros(
+            (new_capacity, num_jackpots),
+            dtype=np.int16,
+        )
+        respin_jackpot_awards = np.zeros(
+            (new_capacity, num_jackpots),
+            dtype=np.bool_,
+        )
 
         respin_step_offsets[:count + 1] = self.respin_step_offsets[:count + 1]
         respin_remaining_before[:count] = self.respin_remaining_before[:count]
         respin_remaining_after[:count] = self.respin_remaining_after[:count]
         respin_reset_flags[:count] = self.respin_reset_flags[:count]
+        respin_jackpot_overlay_boards[:count] = (
+            self.respin_jackpot_overlay_boards[:count]
+        )
+        respin_jackpot_meters_before[:count] = (
+            self.respin_jackpot_meters_before[:count]
+        )
+        respin_jackpot_meters_after[:count] = (
+            self.respin_jackpot_meters_after[:count]
+        )
+        respin_jackpot_awards[:count] = self.respin_jackpot_awards[:count]
 
         self.respin_step_offsets = respin_step_offsets
         self.respin_remaining_before = respin_remaining_before
         self.respin_remaining_after = respin_remaining_after
         self.respin_reset_flags = respin_reset_flags
+        self.respin_jackpot_overlay_boards = respin_jackpot_overlay_boards
+        self.respin_jackpot_meters_before = respin_jackpot_meters_before
+        self.respin_jackpot_meters_after = respin_jackpot_meters_after
+        self.respin_jackpot_awards = respin_jackpot_awards
 
     def _grow_sessions(self):
         old_capacity = self.session_wins.shape[0]
         new_capacity = old_capacity * 2
         max_starting_symbols = self.session_starting_symbols.shape[1]
+        num_jackpots = self.session_jackpot_meters.shape[1]
         count = self.session_count
 
         session_respin_offsets = np.empty(new_capacity + 1, dtype=np.int64)
@@ -517,6 +827,14 @@ class HoldAndSpinStorage:
             new_capacity,
             dtype=np.int16,
         )
+        session_jackpot_meters = np.zeros(
+            (new_capacity, num_jackpots),
+            dtype=np.int16,
+        )
+        session_jackpot_awards = np.zeros(
+            (new_capacity, num_jackpots),
+            dtype=np.bool_,
+        )
 
         session_respin_offsets[:count + 1] = self.session_respin_offsets[
             :count + 1
@@ -529,6 +847,8 @@ class HoldAndSpinStorage:
         session_starting_symbol_counts[:count] = (
             self.session_starting_symbol_counts[:count]
         )
+        session_jackpot_meters[:count] = self.session_jackpot_meters[:count]
+        session_jackpot_awards[:count] = self.session_jackpot_awards[:count]
 
         self.session_respin_offsets = session_respin_offsets
         self.session_wins = session_wins
@@ -537,6 +857,8 @@ class HoldAndSpinStorage:
         self.session_total_respins = session_total_respins
         self.session_starting_symbols = session_starting_symbols
         self.session_starting_symbol_counts = session_starting_symbol_counts
+        self.session_jackpot_meters = session_jackpot_meters
+        self.session_jackpot_awards = session_jackpot_awards
 
     def begin_session(self, starting_bag_symbols):
         if self.session_count == self.session_wins.shape[0]:
@@ -555,11 +877,20 @@ class HoldAndSpinStorage:
                 starting_bag_symbols[symbol_index]
             )
 
-    def finish_session(self, session_win, coin_win, collector_win):
+    def finish_session(
+        self,
+        session_win,
+        coin_win,
+        collector_win,
+        jackpot_meters,
+        jackpot_awards,
+    ):
         index = self.session_count
         self.session_wins[index] = session_win
         self.session_coin_wins[index] = coin_win
         self.session_collector_wins[index] = collector_win
+        self.session_jackpot_meters[index] = jackpot_meters
+        self.session_jackpot_awards[index] = jackpot_awards
         self.session_total_respins[index] = (
             self.respin_count - self.session_respin_offsets[index]
         )
@@ -580,6 +911,19 @@ class HoldAndSpinStorage:
         self.respin_reset_flags[index] = reset_flag
         self.respin_count += 1
         self.respin_step_offsets[self.respin_count] = self.step_count
+
+    def save_jackpot_respin(
+        self,
+        overlay_board,
+        meters_before,
+        meters_after,
+        jackpot_awards,
+    ):
+        index = self.respin_count
+        self.respin_jackpot_overlay_boards[index] = overlay_board
+        self.respin_jackpot_meters_before[index] = meters_before
+        self.respin_jackpot_meters_after[index] = meters_after
+        self.respin_jackpot_awards[index] = jackpot_awards
 
     def save_step(
         self,
@@ -639,6 +983,12 @@ def write_npz(storage, filename, overwrite=False):
         "round_count": np.array(round_count, dtype=np.int64),
         "boards": storage.boards[:spin_count],
         "coin_value_boards": storage.coin_value_boards[:spin_count],
+        "jackpot_overlay_boards": storage.jackpot_overlay_boards[:spin_count],
+        "jackpot_values_before": storage.jackpot_values_before[:spin_count],
+        "jackpot_values_after": storage.jackpot_values_after[:spin_count],
+        "jackpot_increment_counts": storage.jackpot_increment_counts[
+            :spin_count
+        ],
         "wins": storage.wins[:spin_count],
         "line_wins": storage.line_wins[:spin_count],
         "collect_wins": storage.collect_wins[:spin_count],
@@ -724,6 +1074,10 @@ def merge_npz(filenames, output_filename, overwrite=False):
     shape_keys = (
         "boards",
         "coin_value_boards",
+        "jackpot_overlay_boards",
+        "jackpot_values_before",
+        "jackpot_values_after",
+        "jackpot_increment_counts",
         "symbol_wins",
         "symbol_hit_counts",
         "winning_line_numbers",
@@ -772,6 +1126,10 @@ _HOLD_RESPIN_KEYS = (
     "respin_remaining_before",
     "respin_remaining_after",
     "respin_reset_flags",
+    "respin_jackpot_overlay_boards",
+    "respin_jackpot_meters_before",
+    "respin_jackpot_meters_after",
+    "respin_jackpot_awards",
 )
 
 _HOLD_SESSION_KEYS = (
@@ -781,6 +1139,8 @@ _HOLD_SESSION_KEYS = (
     "session_total_respins",
     "session_starting_symbols",
     "session_starting_symbol_counts",
+    "session_jackpot_meters",
+    "session_jackpot_awards",
 )
 
 _HOLD_NPZ_ARRAY_KEYS = (
@@ -815,6 +1175,16 @@ def write_hold_and_spin_npz(storage, filename, overwrite=False):
         "respin_remaining_before": storage.respin_remaining_before[:respin_count],
         "respin_remaining_after": storage.respin_remaining_after[:respin_count],
         "respin_reset_flags": storage.respin_reset_flags[:respin_count],
+        "respin_jackpot_overlay_boards": (
+            storage.respin_jackpot_overlay_boards[:respin_count]
+        ),
+        "respin_jackpot_meters_before": (
+            storage.respin_jackpot_meters_before[:respin_count]
+        ),
+        "respin_jackpot_meters_after": (
+            storage.respin_jackpot_meters_after[:respin_count]
+        ),
+        "respin_jackpot_awards": storage.respin_jackpot_awards[:respin_count],
         "session_respin_offsets": storage.session_respin_offsets[
             :session_count + 1
         ],
@@ -828,6 +1198,47 @@ def write_hold_and_spin_npz(storage, filename, overwrite=False):
         "session_starting_symbol_counts": (
             storage.session_starting_symbol_counts[:session_count]
         ),
+        "session_jackpot_meters": storage.session_jackpot_meters[
+            :session_count
+        ],
+        "session_jackpot_awards": storage.session_jackpot_awards[
+            :session_count
+        ],
+    }
+    return _write_payload(payload, filename, overwrite)
+
+
+def write_full_game_npz(storage, filename, overwrite=False):
+    """Write the combined base/feature/jackpot results for full-game play."""
+    spin_count = int(storage.spin_count)
+    round_count = int(storage.round_count)
+    payload = {
+        "format_version": np.array(NPZ_FORMAT_VERSION, dtype=np.int16),
+        "storage_kind": np.array("full_game"),
+        "spin_count": np.array(spin_count, dtype=np.int64),
+        "round_count": np.array(round_count, dtype=np.int64),
+        "spin_feature_session_indices": (
+            storage.spin_feature_session_indices[:spin_count]
+        ),
+        "spin_base_wins": storage.spin_base_wins[:spin_count],
+        "spin_feature_wins": storage.spin_feature_wins[:spin_count],
+        "spin_jackpot_wins": storage.spin_jackpot_wins[:spin_count],
+        "spin_total_wins": storage.spin_total_wins[:spin_count],
+        "spin_jackpot_values_before_feature": (
+            storage.spin_jackpot_values_before_feature[:spin_count]
+        ),
+        "spin_jackpot_awards": storage.spin_jackpot_awards[:spin_count],
+        "spin_jackpot_award_amounts": (
+            storage.spin_jackpot_award_amounts[:spin_count]
+        ),
+        "spin_jackpot_values_after_feature": (
+            storage.spin_jackpot_values_after_feature[:spin_count]
+        ),
+        "round_spin_offsets": storage.round_spin_offsets[:round_count + 1],
+        "round_base_wins": storage.round_base_wins[:round_count],
+        "round_feature_wins": storage.round_feature_wins[:round_count],
+        "round_jackpot_wins": storage.round_jackpot_wins[:round_count],
+        "round_total_wins": storage.round_total_wins[:round_count],
     }
     return _write_payload(payload, filename, overwrite)
 
@@ -898,7 +1309,17 @@ def merge_hold_and_spin_npz(filenames, output_filename, overwrite=False):
     shards = [_load_hold_and_spin_npz(filename) for filename in filenames]
     reference = shards[0][1]
     for input_path, arrays, _, _, _ in shards[1:]:
-        for key in ("boards", "coin_masks", "session_starting_symbols"):
+        for key in (
+            "boards",
+            "coin_masks",
+            "respin_jackpot_overlay_boards",
+            "respin_jackpot_meters_before",
+            "respin_jackpot_meters_after",
+            "respin_jackpot_awards",
+            "session_starting_symbols",
+            "session_jackpot_meters",
+            "session_jackpot_awards",
+        ):
             if arrays[key].shape[1:] != reference[key].shape[1:]:
                 raise ValueError(
                     f"Array shape mismatch for {key} in {input_path.name}"

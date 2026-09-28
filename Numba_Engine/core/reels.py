@@ -26,10 +26,6 @@ REEL_DICT = {
     "SC4": 17,
     "SC5": 18,
     "SC6": 19,
-    "JP_MINI": 20,
-    "JP_MINOR": 21,
-    "JP_MAJOR": 22,
-    "JP_GRAND": 23,
 }
 
 

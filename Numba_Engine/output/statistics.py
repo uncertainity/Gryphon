@@ -35,6 +35,10 @@ _BASE_REQUIRED_KEYS = (
     "collect_wins",
     "collector_counts",
     "spin_triggers",
+    "jackpot_overlay_boards",
+    "jackpot_values_before",
+    "jackpot_values_after",
+    "jackpot_increment_counts",
 )
 
 _HOLD_AND_SPIN_REQUIRED_KEYS = (
@@ -51,6 +55,12 @@ _HOLD_AND_SPIN_REQUIRED_KEYS = (
     "session_collector_wins",
     "session_total_respins",
     "session_starting_symbol_counts",
+    "respin_jackpot_overlay_boards",
+    "respin_jackpot_meters_before",
+    "respin_jackpot_meters_after",
+    "respin_jackpot_awards",
+    "session_jackpot_meters",
+    "session_jackpot_awards",
 )
 
 _FEATURE_REQUIRED_KEYS = (
@@ -85,6 +95,16 @@ class BaseGameStatistics:
     average_collectors_per_spin: float
     collector_active_spin_count: int
     collector_active_spin_rate: float
+    jackpot_overlay_spin_count: int
+    jackpot_overlay_spin_rate: float
+    total_jackpot_overlays: int
+    average_jackpot_overlays_per_spin: float
+    maximum_jackpot_overlays_on_spin: int
+    jackpot_overlay_counts: np.ndarray
+    jackpot_overlay_count_histogram: np.ndarray
+    jackpot_value_increments: np.ndarray
+    total_jackpot_value_increment: float
+    average_jackpot_value_increment_per_spin: float
     maximum_win: float
     rtp: float
     hit_count: int
@@ -174,6 +194,14 @@ class HoldAndSpinStatistics:
     reset_count: int
     reset_rate: float
     average_starting_symbols: float
+    jackpot_token_respin_count: int
+    jackpot_token_respin_rate: float
+    total_jackpot_tokens: int
+    jackpot_token_counts: np.ndarray
+    jackpot_award_counts: np.ndarray
+    jackpot_award_session_count: int
+    jackpot_award_session_rate: float
+    average_final_jackpot_meters: np.ndarray
     zero_win_count: int
     win_histogram_edges: np.ndarray
     win_histogram_counts: np.ndarray
@@ -185,6 +213,45 @@ class HoldAndSpinStatistics:
         from ..serialization.pretty_print import pretty_print_hold_and_spin
 
         pretty_print_hold_and_spin(self, file=file)
+
+
+@dataclass(frozen=True)
+class FullGameStatistics:
+    """Aggregated monetary results for integrated full-game rounds."""
+
+    source_path: Path
+    round_count: int
+    spin_count: int
+    feature_session_count: int
+    bet_per_spin: float
+    total_bet: float
+    total_win: float
+    total_base_win: float
+    total_feature_win: float
+    total_jackpot_win: float
+    rtp: float
+    base_rtp: float
+    feature_rtp: float
+    jackpot_rtp: float
+    maximum_spin_win: float
+    maximum_round_win: float
+    hit_count: int
+    hit_rate: float
+    feature_trigger_rate: float
+    jackpot_award_counts: np.ndarray
+    jackpot_award_amounts: np.ndarray
+    total_jackpot_award_count: int
+    return_variance: float
+    return_standard_deviation: float
+    zero_win_count: int
+    win_histogram_edges: np.ndarray
+    win_histogram_counts: np.ndarray
+
+    def pretty_print(self, file=None):
+        """Print this summary using the shared full-game formatter."""
+        from ..serialization.pretty_print import pretty_print_full_game
+
+        pretty_print_full_game(self, file=file)
 
 
 def _validated_win_edges(win_histogram_edges):
@@ -233,6 +300,22 @@ def store_base_game(
         collect_wins = np.asarray(data["collect_wins"], dtype=np.float64)
         collector_counts = np.asarray(data["collector_counts"], dtype=np.int64)
         spin_triggers = np.asarray(data["spin_triggers"], dtype=np.int8)
+        jackpot_overlay_boards = np.asarray(
+            data["jackpot_overlay_boards"],
+            dtype=np.int8,
+        )
+        jackpot_values_before = np.asarray(
+            data["jackpot_values_before"],
+            dtype=np.float64,
+        )
+        jackpot_values_after = np.asarray(
+            data["jackpot_values_after"],
+            dtype=np.float64,
+        )
+        jackpot_increment_counts = np.asarray(
+            data["jackpot_increment_counts"],
+            dtype=np.int64,
+        )
         round_spin_offsets = np.asarray(
             data["round_spin_offsets"],
             dtype=np.int64,
@@ -252,6 +335,21 @@ def store_base_game(
         raise ValueError("collector_counts does not match spin_count")
     if spin_triggers.shape != (spin_count,):
         raise ValueError("spin_triggers does not match spin_count")
+    if (
+        jackpot_overlay_boards.ndim != 3
+        or jackpot_overlay_boards.shape[0] != spin_count
+    ):
+        raise ValueError("jackpot_overlay_boards does not match spin_count")
+    if jackpot_increment_counts.ndim != 2:
+        raise ValueError("jackpot_increment_counts must be two-dimensional")
+    num_jackpots = jackpot_increment_counts.shape[1]
+    jackpot_shape = (spin_count, num_jackpots)
+    if num_jackpots < 1:
+        raise ValueError("At least one jackpot type is required")
+    if jackpot_values_before.shape != jackpot_shape:
+        raise ValueError("jackpot_values_before has an invalid shape")
+    if jackpot_values_after.shape != jackpot_shape:
+        raise ValueError("jackpot_values_after has an invalid shape")
     if round_spin_offsets.shape != (round_count + 1,):
         raise ValueError("round_spin_offsets does not match round_count")
     if round_spin_offsets[0] != 0 or round_spin_offsets[-1] != spin_count:
@@ -268,6 +366,32 @@ def store_base_game(
         raise ValueError("Line and Collector wins do not reconcile with wins")
     if np.any((spin_triggers != 0) & (spin_triggers != 1)):
         raise ValueError("spin_triggers must contain only 0 or 1")
+    if np.any(jackpot_increment_counts < 0):
+        raise ValueError("jackpot_increment_counts cannot be negative")
+    if not np.all(np.isfinite(jackpot_values_before)) or not np.all(
+        np.isfinite(jackpot_values_after)
+    ):
+        raise ValueError("Jackpot values must be finite")
+    if np.any(jackpot_values_after < jackpot_values_before):
+        raise ValueError("Base-game jackpot values cannot decrease")
+    if np.any(jackpot_overlay_boards < -1) or np.any(
+        jackpot_overlay_boards >= num_jackpots
+    ):
+        raise ValueError("jackpot_overlay_boards contains an invalid type")
+
+    calculated_increment_counts = np.zeros_like(jackpot_increment_counts)
+    for jackpot_type in range(num_jackpots):
+        calculated_increment_counts[:, jackpot_type] = np.count_nonzero(
+            jackpot_overlay_boards == jackpot_type,
+            axis=(1, 2),
+        )
+    if not np.array_equal(
+        calculated_increment_counts,
+        jackpot_increment_counts,
+    ):
+        raise ValueError(
+            "jackpot_increment_counts does not match the overlay boards"
+        )
 
     normalized_wins = spin_wins / bet_per_spin
     positive_wins = normalized_wins[normalized_wins > 0]
@@ -289,6 +413,22 @@ def store_base_game(
     total_line_win = float(line_wins.sum(dtype=np.float64))
     total_collect_win = float(collect_wins.sum(dtype=np.float64))
     collector_active_spin_count = int(np.count_nonzero(collector_counts))
+    jackpot_overlays_per_spin = jackpot_increment_counts.sum(axis=1)
+    jackpot_overlay_spin_count = int(
+        np.count_nonzero(jackpot_overlays_per_spin)
+    )
+    jackpot_overlay_counts = jackpot_increment_counts.sum(
+        axis=0,
+        dtype=np.int64,
+    )
+    total_jackpot_overlays = int(jackpot_overlay_counts.sum())
+    jackpot_overlay_count_histogram = np.bincount(
+        jackpot_overlays_per_spin,
+    ).astype(np.int64, copy=False)
+    jackpot_value_increments = (
+        jackpot_values_after - jackpot_values_before
+    ).sum(axis=0, dtype=np.float64)
+    total_jackpot_value_increment = float(jackpot_value_increments.sum())
 
     statistics = BaseGameStatistics(
         source_path=source_path.resolve(),
@@ -304,6 +444,22 @@ def store_base_game(
         average_collectors_per_spin=float(collector_counts.mean()),
         collector_active_spin_count=collector_active_spin_count,
         collector_active_spin_rate=collector_active_spin_count / spin_count,
+        jackpot_overlay_spin_count=jackpot_overlay_spin_count,
+        jackpot_overlay_spin_rate=jackpot_overlay_spin_count / spin_count,
+        total_jackpot_overlays=total_jackpot_overlays,
+        average_jackpot_overlays_per_spin=(
+            total_jackpot_overlays / spin_count
+        ),
+        maximum_jackpot_overlays_on_spin=int(
+            jackpot_overlays_per_spin.max()
+        ),
+        jackpot_overlay_counts=jackpot_overlay_counts,
+        jackpot_overlay_count_histogram=jackpot_overlay_count_histogram,
+        jackpot_value_increments=jackpot_value_increments,
+        total_jackpot_value_increment=total_jackpot_value_increment,
+        average_jackpot_value_increment_per_spin=(
+            total_jackpot_value_increment / spin_count
+        ),
         maximum_win=float(spin_wins.max()),
         rtp=total_win / total_bet,
         hit_count=hit_count,
@@ -557,6 +713,30 @@ def store_hold_and_spin(
             data["session_starting_symbol_counts"],
             dtype=np.int64,
         )
+        respin_jackpot_overlay_boards = np.asarray(
+            data["respin_jackpot_overlay_boards"],
+            dtype=np.int8,
+        )
+        respin_jackpot_meters_before = np.asarray(
+            data["respin_jackpot_meters_before"],
+            dtype=np.int64,
+        )
+        respin_jackpot_meters_after = np.asarray(
+            data["respin_jackpot_meters_after"],
+            dtype=np.int64,
+        )
+        respin_jackpot_awards = np.asarray(
+            data["respin_jackpot_awards"],
+            dtype=np.bool_,
+        )
+        session_jackpot_meters = np.asarray(
+            data["session_jackpot_meters"],
+            dtype=np.int64,
+        )
+        session_jackpot_awards = np.asarray(
+            data["session_jackpot_awards"],
+            dtype=np.bool_,
+        )
 
     if session_count < 1:
         raise ValueError("Hold-and-Spin NPZ must contain at least one session")
@@ -576,6 +756,30 @@ def store_hold_and_spin(
         raise ValueError("feature_types does not match step_count")
     if respin_reset_flags.shape != (respin_count,):
         raise ValueError("respin_reset_flags does not match respin_count")
+    if (
+        respin_jackpot_overlay_boards.ndim != 3
+        or respin_jackpot_overlay_boards.shape[0] != respin_count
+    ):
+        raise ValueError("respin_jackpot_overlay_boards has an invalid shape")
+    if respin_jackpot_meters_before.ndim != 2:
+        raise ValueError("respin_jackpot_meters_before must be two-dimensional")
+    num_jackpots = respin_jackpot_meters_before.shape[1]
+    respin_jackpot_shape = (respin_count, num_jackpots)
+    session_jackpot_shape = (session_count, num_jackpots)
+    if num_jackpots < 1:
+        raise ValueError("At least one jackpot type is required")
+    for name, values in (
+        ("respin_jackpot_meters_after", respin_jackpot_meters_after),
+        ("respin_jackpot_awards", respin_jackpot_awards),
+    ):
+        if values.shape != respin_jackpot_shape:
+            raise ValueError(f"{name} has an invalid shape")
+    for name, values in (
+        ("session_jackpot_meters", session_jackpot_meters),
+        ("session_jackpot_awards", session_jackpot_awards),
+    ):
+        if values.shape != session_jackpot_shape:
+            raise ValueError(f"{name} has an invalid shape")
     if respin_step_offsets.shape != (respin_count + 1,):
         raise ValueError("respin_step_offsets does not match respin_count")
     if session_respin_offsets.shape != (session_count + 1,):
@@ -612,6 +816,38 @@ def store_hold_and_spin(
         raise ValueError("Every session must contain a starting Bag symbol")
     if np.any((feature_types < -2) | (feature_types > 5)):
         raise ValueError("feature_types contains an unknown event code")
+    if np.any(respin_jackpot_meters_before < 0) or np.any(
+        respin_jackpot_meters_after < respin_jackpot_meters_before
+    ):
+        raise ValueError("Jackpot meters cannot be negative or decrease")
+    if np.any(respin_jackpot_overlay_boards < -1) or np.any(
+        respin_jackpot_overlay_boards >= num_jackpots
+    ):
+        raise ValueError("Jackpot overlay board contains an invalid type")
+
+    jackpot_token_counts = np.zeros(num_jackpots, dtype=np.int64)
+    for jackpot_type in range(num_jackpots):
+        jackpot_token_counts[jackpot_type] = np.count_nonzero(
+            respin_jackpot_overlay_boards == jackpot_type
+        )
+    tokens_per_respin = np.count_nonzero(
+        respin_jackpot_overlay_boards >= 0,
+        axis=(1, 2),
+    )
+    meter_increments = (
+        respin_jackpot_meters_after - respin_jackpot_meters_before
+    ).sum(axis=0, dtype=np.int64)
+    if not np.array_equal(jackpot_token_counts, meter_increments):
+        raise ValueError("Jackpot token overlays do not match meter increments")
+    jackpot_award_counts = session_jackpot_awards.sum(
+        axis=0,
+        dtype=np.int64,
+    )
+    if not np.array_equal(
+        jackpot_award_counts,
+        respin_jackpot_awards.sum(axis=0, dtype=np.int64),
+    ):
+        raise ValueError("Respin and session jackpot awards do not reconcile")
 
     normalized_wins = session_wins / bet_per_session
     positive_wins = normalized_wins[normalized_wins > 0]
@@ -629,6 +865,11 @@ def store_hold_and_spin(
     total_bet = float(session_count * bet_per_session)
     total_win = float(session_wins.sum(dtype=np.float64))
     reset_count = int(respin_reset_flags.sum(dtype=np.int64))
+    jackpot_token_respin_count = int(np.count_nonzero(tokens_per_respin))
+    total_jackpot_tokens = int(jackpot_token_counts.sum())
+    jackpot_award_session_count = int(
+        np.count_nonzero(np.any(session_jackpot_awards, axis=1))
+    )
 
     statistics = HoldAndSpinStatistics(
         source_path=source_path.resolve(),
@@ -660,6 +901,16 @@ def store_hold_and_spin(
         reset_count=reset_count,
         reset_rate=reset_count / respin_count,
         average_starting_symbols=float(session_starting_symbol_counts.mean()),
+        jackpot_token_respin_count=jackpot_token_respin_count,
+        jackpot_token_respin_rate=jackpot_token_respin_count / respin_count,
+        total_jackpot_tokens=total_jackpot_tokens,
+        jackpot_token_counts=jackpot_token_counts,
+        jackpot_award_counts=jackpot_award_counts,
+        jackpot_award_session_count=jackpot_award_session_count,
+        jackpot_award_session_rate=(
+            jackpot_award_session_count / session_count
+        ),
+        average_final_jackpot_meters=session_jackpot_meters.mean(axis=0),
         zero_win_count=session_count - hit_count,
         win_histogram_edges=edges,
         win_histogram_counts=win_histogram_counts,
@@ -671,12 +922,169 @@ def store_hold_and_spin(
     return statistics
 
 
+def store_full_game(
+    npz_path,
+    bet_per_spin=1.0,
+    win_histogram_edges=None,
+    print_result=True,
+):
+    """Load and aggregate integrated base, feature and jackpot results."""
+    source_path = Path(npz_path)
+    if not source_path.is_file():
+        raise FileNotFoundError(f"Full-game NPZ does not exist: {source_path}")
+    if bet_per_spin <= 0:
+        raise ValueError("bet_per_spin must be positive")
+    edges = _validated_win_edges(win_histogram_edges)
+    required = (
+        "storage_kind",
+        "spin_count",
+        "round_count",
+        "spin_feature_session_indices",
+        "spin_base_wins",
+        "spin_feature_wins",
+        "spin_jackpot_wins",
+        "spin_total_wins",
+        "spin_jackpot_awards",
+        "spin_jackpot_award_amounts",
+        "round_spin_offsets",
+        "round_base_wins",
+        "round_feature_wins",
+        "round_jackpot_wins",
+        "round_total_wins",
+    )
+    with np.load(source_path, allow_pickle=False) as data:
+        missing = [key for key in required if key not in data]
+        if missing:
+            raise ValueError(
+                f"Full-game NPZ is missing required arrays: {missing}"
+            )
+        if str(data["storage_kind"]) != "full_game":
+            raise ValueError("NPZ is not a full-game storage archive")
+        spin_count = int(data["spin_count"])
+        round_count = int(data["round_count"])
+        feature_indices = np.asarray(
+            data["spin_feature_session_indices"], dtype=np.int64
+        )
+        spin_base = np.asarray(data["spin_base_wins"], dtype=np.float64)
+        spin_feature = np.asarray(data["spin_feature_wins"], dtype=np.float64)
+        spin_jackpot = np.asarray(data["spin_jackpot_wins"], dtype=np.float64)
+        spin_total = np.asarray(data["spin_total_wins"], dtype=np.float64)
+        awards = np.asarray(data["spin_jackpot_awards"], dtype=np.bool_)
+        award_amounts = np.asarray(
+            data["spin_jackpot_award_amounts"], dtype=np.float64
+        )
+        offsets = np.asarray(data["round_spin_offsets"], dtype=np.int64)
+        round_base = np.asarray(data["round_base_wins"], dtype=np.float64)
+        round_feature = np.asarray(
+            data["round_feature_wins"], dtype=np.float64
+        )
+        round_jackpot = np.asarray(
+            data["round_jackpot_wins"], dtype=np.float64
+        )
+        round_total = np.asarray(data["round_total_wins"], dtype=np.float64)
+
+    if spin_count < 1 or round_count < 1:
+        raise ValueError("Full-game NPZ must contain spins and rounds")
+    for name, array in (
+        ("feature indices", feature_indices),
+        ("base wins", spin_base),
+        ("feature wins", spin_feature),
+        ("jackpot wins", spin_jackpot),
+        ("total wins", spin_total),
+    ):
+        if array.shape != (spin_count,):
+            raise ValueError(f"Full-game {name} do not match spin_count")
+    if awards.ndim != 2 or awards.shape[0] != spin_count:
+        raise ValueError("Full-game jackpot awards have an invalid shape")
+    if award_amounts.shape != awards.shape:
+        raise ValueError("Full-game jackpot award amounts have an invalid shape")
+    if np.any(award_amounts[~awards] != 0.0):
+        raise ValueError("Unawarded jackpot types must have zero award amounts")
+    if not np.allclose(spin_jackpot, award_amounts.sum(axis=1)):
+        raise ValueError("Jackpot wins do not reconcile with jackpot awards")
+    if not np.allclose(spin_total, spin_base + spin_feature + spin_jackpot):
+        raise ValueError("Full-game spin components do not reconcile")
+    if offsets.shape != (round_count + 1,) or offsets[0] != 0:
+        raise ValueError("Full-game round offsets are invalid")
+    if offsets[-1] != spin_count or np.any(np.diff(offsets) < 1):
+        raise ValueError("Full-game round offsets do not cover all spins")
+    for name, array in (
+        ("base wins", round_base),
+        ("feature wins", round_feature),
+        ("jackpot wins", round_jackpot),
+        ("total wins", round_total),
+    ):
+        if array.shape != (round_count,):
+            raise ValueError(f"Full-game round {name} have an invalid shape")
+    calculated_rounds = np.empty((round_count, 4), dtype=np.float64)
+    for index in range(round_count):
+        start, end = int(offsets[index]), int(offsets[index + 1])
+        calculated_rounds[index] = (
+            spin_base[start:end].sum(),
+            spin_feature[start:end].sum(),
+            spin_jackpot[start:end].sum(),
+            spin_total[start:end].sum(),
+        )
+    stored_rounds = np.column_stack(
+        (round_base, round_feature, round_jackpot, round_total)
+    )
+    if not np.allclose(calculated_rounds, stored_rounds):
+        raise ValueError("Full-game round totals do not reconcile with spins")
+
+    positive_wins = spin_total[spin_total > 0]
+    normalized_wins = spin_total / bet_per_spin
+    histogram, _ = np.histogram(
+        positive_wins / bet_per_spin,
+        bins=edges,
+    )
+    total_bet = float(spin_count * bet_per_spin)
+    total_win = float(spin_total.sum(dtype=np.float64))
+    feature_count = int(np.count_nonzero(feature_indices >= 0))
+    hit_count = int(positive_wins.size)
+    jackpot_award_counts = awards.sum(axis=0, dtype=np.int64)
+    jackpot_award_amounts = award_amounts.sum(axis=0, dtype=np.float64)
+    statistics = FullGameStatistics(
+        source_path=source_path.resolve(),
+        round_count=round_count,
+        spin_count=spin_count,
+        feature_session_count=feature_count,
+        bet_per_spin=float(bet_per_spin),
+        total_bet=total_bet,
+        total_win=total_win,
+        total_base_win=float(spin_base.sum(dtype=np.float64)),
+        total_feature_win=float(spin_feature.sum(dtype=np.float64)),
+        total_jackpot_win=float(spin_jackpot.sum(dtype=np.float64)),
+        rtp=total_win / total_bet,
+        base_rtp=float(spin_base.sum(dtype=np.float64)) / total_bet,
+        feature_rtp=float(spin_feature.sum(dtype=np.float64)) / total_bet,
+        jackpot_rtp=float(spin_jackpot.sum(dtype=np.float64)) / total_bet,
+        maximum_spin_win=float(spin_total.max()),
+        maximum_round_win=float(round_total.max()),
+        hit_count=hit_count,
+        hit_rate=hit_count / spin_count,
+        feature_trigger_rate=feature_count / spin_count,
+        jackpot_award_counts=jackpot_award_counts,
+        jackpot_award_amounts=jackpot_award_amounts,
+        total_jackpot_award_count=int(jackpot_award_counts.sum()),
+        return_variance=float(np.var(normalized_wins)),
+        return_standard_deviation=float(np.std(normalized_wins)),
+        zero_win_count=spin_count - hit_count,
+        win_histogram_edges=edges,
+        win_histogram_counts=histogram,
+    )
+    if print_result:
+        statistics.pretty_print()
+    return statistics
+
+
 __all__ = [
     "BaseGameStatistics",
     "DEFAULT_WIN_HISTOGRAM_EDGES",
     "FeatureStatistics",
+    "FullGameStatistics",
     "HoldAndSpinStatistics",
     "store_base_game",
     "store_free_game",
+    "store_full_game",
     "store_hold_and_spin",
 ]

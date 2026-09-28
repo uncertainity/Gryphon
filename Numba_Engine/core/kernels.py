@@ -15,6 +15,86 @@ def probChoice(total_wts, mult_numbers):
 
 
 @njit
+def make_base_jackpot_overlay(pay_window, overlay_rules, jackpot_types):
+    """Generate typed jackpot overlays without replacing reel symbols.
+
+    Overlay values are jackpot type indices. ``-1`` means that the position
+    has no jackpot overlay. Positions are sampled without replacement, and a
+    sampled count is reduced when the window has fewer eligible positions.
+    """
+    overlay_window = np.full(pay_window.shape, -1, dtype=np.int8)
+    eligible_positions = np.empty(pay_window.size, dtype=np.int32)
+    eligible_count = 0
+
+    flat_pay_window = pay_window.ravel()
+    for position in range(flat_pay_window.size):
+        symbol = flat_pay_window[position]
+        is_eligible = False
+        for eligible_symbol in overlay_rules.eligible_symbols:
+            if symbol == eligible_symbol:
+                is_eligible = True
+                break
+        if is_eligible:
+            eligible_positions[eligible_count] = position
+            eligible_count += 1
+
+    requested_count = int(
+        probChoice(
+            overlay_rules.count_probabilities,
+            overlay_rules.count_values,
+        )
+    )
+    overlay_count = min(requested_count, eligible_count)
+    flat_overlay_window = overlay_window.ravel()
+
+    # Partial Fisher-Yates shuffle selects unique eligible cells without
+    # allocating another full-size position array.
+    for selection_index in range(overlay_count):
+        swap_index = np.random.randint(selection_index, eligible_count)
+        selected_position = eligible_positions[swap_index]
+        eligible_positions[swap_index] = eligible_positions[selection_index]
+        eligible_positions[selection_index] = selected_position
+
+        jackpot_type = int(
+            probChoice(
+                overlay_rules.jackpot_type_probabilities,
+                jackpot_types,
+            )
+        )
+        flat_overlay_window[selected_position] = jackpot_type
+
+    return overlay_window
+
+
+@njit
+def apply_jackpot_overlay(overlay_window, jackpot_rules, jackpot_values):
+    """Apply overlays to mutable values using the configured seed cap."""
+    values_before = jackpot_values.copy()
+    increment_counts = np.zeros(
+        len(jackpot_rules.jackpot_types),
+        dtype=np.int16,
+    )
+
+    for jackpot_type in overlay_window.ravel():
+        if jackpot_type < 0:
+            continue
+
+        type_index = int(jackpot_type)
+        increment_counts[type_index] += 1
+        maximum_value = (
+            jackpot_rules.seed_values[type_index]
+            * jackpot_rules.cap_multiplier
+        )
+        increased_value = (
+            jackpot_values[type_index]
+            + jackpot_rules.increment_values[type_index]
+        )
+        jackpot_values[type_index] = min(increased_value, maximum_value)
+
+    return values_before, increment_counts
+
+
+@njit
 def select_reelset_index(weights):
     """Select one reelset index from a normalized weight array."""
     choice = np.random.uniform(0.0, 1.0)
@@ -84,8 +164,9 @@ def line_win_eval(pay_window, pay_table, pay_lines, wild_symbol):
     four is a five-reel match.
 
     Symbols without a row in ``pay_table`` are treated as non-paying feature
-    symbols. This keeps Coin, Collect, Scatter, and Jackpot tokens out of line
-    evaluation without relying on a single scatter-symbol ID.
+    symbols. This keeps Coin, Collect, and Scatter symbols out of line
+    evaluation without relying on a single scatter-symbol ID. Jackpot tokens
+    are stored separately in the overlay window.
     """
     num_reels = pay_window.shape[1]
     num_lines = pay_lines.shape[0]
