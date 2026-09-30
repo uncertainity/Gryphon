@@ -9,6 +9,43 @@ from .reels import REEL_DICT
 _REELS_ROOT = Path(__file__).resolve().parents[2] / "Reels"
 
 
+class JackpotConfig(NamedTuple):
+    """Shared monetary rules for the four progressive jackpots."""
+
+    jackpot_types: np.ndarray
+    seed_values: np.ndarray
+    increment_values: np.ndarray
+    cap_multiplier: float
+
+
+class BaseJackpotOverlayConfig(NamedTuple):
+    """Rules for generating jackpot overlays on a base-game window."""
+
+    count_values: np.ndarray
+    count_probabilities: np.ndarray
+    jackpot_type_probabilities: np.ndarray
+    eligible_symbols: np.ndarray
+
+
+JACKPOT_CONFIG = JackpotConfig(
+    jackpot_types=np.arange(4, dtype=np.int8),
+    seed_values=np.array([2.0, 10.0, 100.0, 10_000.0], dtype=np.float64),
+    increment_values=np.array([0.1, 0.5, 5.0, 50.0], dtype=np.float64),
+    cap_multiplier=2.0,
+)
+
+
+BASE_JACKPOT_OVERLAY_CONFIG = BaseJackpotOverlayConfig(
+    count_values=np.array([0, 1, 2, 3, 4], dtype=np.int8),
+    count_probabilities=np.array(
+        [0.70, 0.20, 0.07, 0.02, 0.01],
+        dtype=np.float64,
+    ),
+    jackpot_type_probabilities=np.full(4, 0.25, dtype=np.float64),
+    eligible_symbols=np.arange(12, dtype=np.int16),
+)
+
+
 class BaseGameConfig(NamedTuple):
     reelset_path: str
     reelset_probabilities: np.ndarray
@@ -75,6 +112,8 @@ BASE_GAME_CONFIG = BaseGameConfig(
         ],
         dtype=np.int16,
     ),
+    # SC1-SC6 together deterministically launch Combo. The workbook's Combo
+    # odds are an observed result of reel frequency and scatter conversion.
     combo_feature_probability=1.0,
     coin_symbol=REEL_DICT["COIN"],
     collect_symbol=REEL_DICT["COLLECT"],
@@ -121,13 +160,19 @@ JACKPOT_TOKEN_CONFIG = JackpotTokenConfig(
 
 
 class FeatureRtpConfig(NamedTuple):
+    """Workbook tuning references plus the applied payout multiplier.
+
+    The reported feature rates are not launch gates. Feature launches are
+    driven by symbols converted from the live base-reel window.
+    """
+
     target_total_rtp: float
     base_rtp_locked: float
     target_feature_rtp: float
     overall_feature_probability: float
     requested_single_feature_probability: float
     implemented_single_feature_probability: float
-    combo_feature_probability: float
+    reported_combo_frequency: float
     feature_payout_multiplier: float
 
 
@@ -138,7 +183,7 @@ FEATURE_RTP_CONFIG = FeatureRtpConfig(
     overall_feature_probability=0.01,
     requested_single_feature_probability=1.0 / 600.0,
     implemented_single_feature_probability=1.0 / 625.0,
-    combo_feature_probability=1.0 / 2500.0,
+    reported_combo_frequency=1.0 / 2500.0,
     feature_payout_multiplier=1.086911,
 )
 
@@ -722,6 +767,10 @@ class HoldAndSpinConfig(NamedTuple):
     multiplier_probabilities: np.ndarray
     max_collector_events: int
     rows_unlocked_per_expansion: int
+    jackpot_token_probability: float
+    jackpot_type_probabilities: np.ndarray
+    jackpot_collection_targets: np.ndarray
+    max_jackpot_tokens_per_respin: int
 
 
 HOLD_AND_SPIN_CONFIG = HoldAndSpinConfig(
@@ -816,6 +865,54 @@ HOLD_AND_SPIN_CONFIG = HoldAndSpinConfig(
     ),
     max_collector_events=3,
     rows_unlocked_per_expansion=1,
+    jackpot_token_probability=0.16,
+    jackpot_type_probabilities=np.full(4, 0.25, dtype=np.float64),
+    jackpot_collection_targets=np.full(4, 3, dtype=np.int16),
+    max_jackpot_tokens_per_respin=1,
+)
+
+
+class GameFeatureConfigs(NamedTuple):
+    """All feature rule sets routed through the engine configuration."""
+
+    expansion: ExpansionFeatureConfig
+    multiplier: MultiplierFeatureConfig
+    grow: GrowFeatureConfig
+    boost: BoostFeatureConfig
+    collect: CollectFeatureConfig
+    splitter: SplitterFeatureConfig
+    mega_combo: MegaComboFeatureConfig
+
+
+FEATURE_CONFIGS = GameFeatureConfigs(
+    expansion=EXPANSION_FEATURE_CONFIG,
+    multiplier=MULTIPLIER_FEATURE_CONFIG,
+    grow=GROW_FEATURE_CONFIG,
+    boost=BOOST_FEATURE_CONFIG,
+    collect=COLLECT_FEATURE_CONFIG,
+    splitter=SPLITTER_FEATURE_CONFIG,
+    mega_combo=MEGA_COMBO_FEATURE_CONFIG,
+)
+
+
+class FullGameConfig(NamedTuple):
+    """Composition of stable engine rules and branch-specific features."""
+
+    base_game: BaseGameConfig
+    base_jackpot_overlay: BaseJackpotOverlayConfig
+    jackpots: JackpotConfig
+    jackpot_tokens: JackpotTokenConfig
+    feature_rtp: FeatureRtpConfig
+    features: GameFeatureConfigs
+
+
+FULL_GAME_CONFIG = FullGameConfig(
+    base_game=BASE_GAME_CONFIG,
+    base_jackpot_overlay=BASE_JACKPOT_OVERLAY_CONFIG,
+    jackpots=JACKPOT_CONFIG,
+    jackpot_tokens=JACKPOT_TOKEN_CONFIG,
+    feature_rtp=FEATURE_RTP_CONFIG,
+    features=FEATURE_CONFIGS,
 )
 
 

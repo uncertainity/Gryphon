@@ -72,14 +72,17 @@ def test_base_reel_collection_loads_both_reelsets_with_configured_weights():
     assert 0.045 <= combined_trigger_probability <= 0.055
 
 
-def test_any_single_sc_symbol_can_trigger_free_game():
-    for scatter_symbol in BASE_GAME_CONFIG.free_game_symbols:
-        board = np.zeros(
-            (BASE_GAME_CONFIG.num_rows, BASE_GAME_CONFIG.num_reels),
-            dtype=np.int16,
-        )
+def test_only_generic_sc_triggers_conversion_from_the_base_game():
+    board = np.zeros(
+        (BASE_GAME_CONFIG.num_rows, BASE_GAME_CONFIG.num_reels),
+        dtype=np.int16,
+    )
+    board[1, 2] = BASE_GAME_CONFIG.sc_symbol
+    assert has_free_game_trigger(board, BASE_GAME_CONFIG)
+
+    for scatter_symbol in BASE_GAME_CONFIG.scatter_feature_symbols:
         board[1, 2] = scatter_symbol
-        assert has_free_game_trigger(board, BASE_GAME_CONFIG)
+        assert not has_free_game_trigger(board, BASE_GAME_CONFIG)
 
     board = np.full(
         (BASE_GAME_CONFIG.num_rows, BASE_GAME_CONFIG.num_reels),

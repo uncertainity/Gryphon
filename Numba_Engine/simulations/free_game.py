@@ -12,6 +12,77 @@ from ..core.storage import (
     merge_hold_and_spin_npz,
     write_hold_and_spin_npz,
 )
+from .feature_flows import (
+    run_boost_feature,
+    run_collect_feature,
+    run_expansion_feature,
+    run_grow_feature,
+    run_mega_combo_feature,
+    run_multiplier_feature,
+    run_splitter_feature,
+)
+
+
+FEATURE_NAMES = (
+    "Splitter",
+    "Grow",
+    "Boost",
+    "Multiplier",
+    "Collect",
+    "Expansion",
+    "Mega Combo",
+)
+
+
+def run_configured_features(
+    pay_window,
+    feature_flags,
+    combo_triggered,
+    config,
+    random_generator,
+):
+    """Route a converted base window through the configured feature engine."""
+    flags = np.asarray(feature_flags, dtype=np.bool_).copy()
+    for index, symbol in enumerate(config.base_game.scatter_feature_symbols):
+        if np.any(pay_window == symbol):
+            flags[index] = True
+
+    def next_seed():
+        return int(random_generator.integers(0, np.iinfo(np.int32).max))
+
+    if combo_triggered:
+        result = run_mega_combo_feature(
+            base_window=pay_window,
+            rules=config.features.mega_combo,
+            seed=next_seed(),
+            payout_multiplier=config.feature_rtp.feature_payout_multiplier,
+        )
+        return [(6, result)]
+
+    routed = []
+    runners = (
+        (run_splitter_feature, config.features.splitter),
+        (run_grow_feature, config.features.grow),
+        (run_boost_feature, config.features.boost),
+        (run_multiplier_feature, config.features.multiplier),
+        (run_collect_feature, config.features.collect),
+        (run_expansion_feature, config.features.expansion),
+    )
+    for feature_index, (runner, rules) in enumerate(runners):
+        if flags[feature_index]:
+            routed.append(
+                (
+                    feature_index,
+                    runner(
+                        rules=rules,
+                        seed=next_seed(),
+                        payout_multiplier=(
+                            config.feature_rtp.feature_payout_multiplier
+                        ),
+                    ),
+                )
+            )
+    return routed
 
 
 @njit

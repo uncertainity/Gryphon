@@ -125,6 +125,18 @@ def base_game_storage_to_dict(storage):
                     "coin_value_board": (
                         storage.coin_value_boards[spin_index].tolist()
                     ),
+                    "jackpot_overlay_board": (
+                        storage.jackpot_overlay_boards[spin_index].tolist()
+                    ),
+                    "jackpot_values_before": (
+                        storage.jackpot_values_before[spin_index].tolist()
+                    ),
+                    "jackpot_values_after": (
+                        storage.jackpot_values_after[spin_index].tolist()
+                    ),
+                    "jackpot_increment_counts": (
+                        storage.jackpot_increment_counts[spin_index].tolist()
+                    ),
                     "win": float(storage.wins[spin_index]),
                     "line_win": float(storage.line_wins[spin_index]),
                     "collect_win": float(storage.collect_wins[spin_index]),
@@ -207,6 +219,18 @@ def hold_and_spin_storage_to_dict(storage):
                         storage.respin_remaining_after[respin_index]
                     ),
                     "reset": bool(storage.respin_reset_flags[respin_index]),
+                    "jackpot_overlay_board": storage.respin_jackpot_overlay_boards[
+                        respin_index
+                    ].tolist(),
+                    "jackpot_meters_before": storage.respin_jackpot_meters_before[
+                        respin_index
+                    ].tolist(),
+                    "jackpot_meters_after": storage.respin_jackpot_meters_after[
+                        respin_index
+                    ].tolist(),
+                    "jackpot_awards": storage.respin_jackpot_awards[
+                        respin_index
+                    ].tolist(),
                     "step_start": step_start,
                     "step_end": step_end,
                     "steps": steps,
@@ -230,6 +254,12 @@ def hold_and_spin_storage_to_dict(storage):
                 "starting_symbols": storage.session_starting_symbols[
                     session_index, :starting_count
                 ].tolist(),
+                "jackpot_meters": storage.session_jackpot_meters[
+                    session_index
+                ].tolist(),
+                "jackpot_awards": storage.session_jackpot_awards[
+                    session_index
+                ].tolist(),
                 "respin_start": respin_start,
                 "respin_end": respin_end,
                 "respins": respins,
@@ -246,6 +276,108 @@ def hold_and_spin_storage_to_dict(storage):
     }
 
 
+def full_game_storage_to_dict(full_storage, base_storage):
+    """Join routed full-game and base-game storage into a JSON payload."""
+    if int(full_storage.spin_count) != int(base_storage.spin_count):
+        raise ValueError("Full-game and base-game spin counts do not match")
+    if int(full_storage.round_count) != int(base_storage.round_count):
+        raise ValueError("Full-game and base-game round counts do not match")
+
+    base_payload = base_game_storage_to_dict(base_storage)
+    base_spins = [
+        spin
+        for round_result in base_payload["rounds"]
+        for spin in round_result["spins"]
+    ]
+    feature_names = (
+        "Splitter",
+        "Grow",
+        "Boost",
+        "Multiplier",
+        "Collect",
+        "Expansion",
+        "Mega Combo",
+    )
+    rounds = []
+    for round_index in range(int(full_storage.round_count)):
+        spin_start = int(full_storage.round_spin_offsets[round_index])
+        spin_end = int(full_storage.round_spin_offsets[round_index + 1])
+        spins = []
+        for spin_index in range(spin_start, spin_end):
+            feature_mask = int(full_storage.spin_feature_masks[spin_index])
+            feature_routes = [
+                name
+                for feature_index, name in enumerate(feature_names)
+                if feature_mask & (1 << feature_index)
+            ]
+            spins.append(
+                {
+                    "spin_index": spin_index,
+                    "base_spin": base_spins[spin_index],
+                    "feature_routes": feature_routes,
+                    "base_win": float(full_storage.spin_base_wins[spin_index]),
+                    "feature_win": float(
+                        full_storage.spin_feature_wins[spin_index]
+                    ),
+                    "jackpot_win": float(
+                        full_storage.spin_jackpot_wins[spin_index]
+                    ),
+                    "total_win": float(
+                        full_storage.spin_total_wins[spin_index]
+                    ),
+                    "jackpot_values_before_feature": (
+                        full_storage.spin_jackpot_values_before_feature[
+                            spin_index
+                        ].tolist()
+                    ),
+                    "jackpot_awards": full_storage.spin_jackpot_awards[
+                        spin_index
+                    ].tolist(),
+                    "jackpot_award_amounts": (
+                        full_storage.spin_jackpot_award_amounts[
+                            spin_index
+                        ].tolist()
+                    ),
+                    "jackpot_values_after_feature": (
+                        full_storage.spin_jackpot_values_after_feature[
+                            spin_index
+                        ].tolist()
+                    ),
+                }
+            )
+        rounds.append(
+            {
+                "round_index": round_index,
+                "spin_start": spin_start,
+                "spin_end": spin_end,
+                "base_win": float(full_storage.round_base_wins[round_index]),
+                "feature_win": float(
+                    full_storage.round_feature_wins[round_index]
+                ),
+                "jackpot_win": float(
+                    full_storage.round_jackpot_wins[round_index]
+                ),
+                "total_win": float(
+                    full_storage.round_total_wins[round_index]
+                ),
+                "spins": spins,
+            }
+        )
+
+    return {
+        "format_version": 1,
+        "storage_type": "full_game",
+        "spin_count": int(full_storage.spin_count),
+        "round_count": int(full_storage.round_count),
+        "feature_session_count": int(full_storage.feature_session_count),
+        "feature_names": list(feature_names),
+        "feature_trigger_counts": full_storage.feature_trigger_counts.tolist(),
+        "feature_win_amounts": full_storage.feature_win_amounts.tolist(),
+        "feature_spin_counts": full_storage.feature_spin_counts.tolist(),
+        "rounds": rounds,
+    }
+
+
 def storage_to_dict(storage):
     """Dispatch the supplied Storage class to its JSON representation."""
     if hasattr(storage, "round_count"):
@@ -257,6 +389,16 @@ def storage_to_dict(storage):
 
 def write_json(storage, filename, overwrite=False, indent=2):
     """Write populated storage inside the package's JSON library."""
+    return write_json_payload(
+        storage_to_dict(storage),
+        filename,
+        overwrite=overwrite,
+        indent=indent,
+    )
+
+
+def write_json_payload(payload, filename, overwrite=False, indent=2):
+    """Write an already composed JSON payload inside the JSON library."""
     filename = Path(filename)
     if filename.is_absolute() or len(filename.parts) != 1:
         raise ValueError("JSON filename must not contain a directory path")
@@ -271,7 +413,7 @@ def write_json(storage, filename, overwrite=False, indent=2):
         raise FileExistsError(f"JSON output already exists: {output_path}")
 
     with output_path.open("w", encoding="utf-8") as output_file:
-        json.dump(storage_to_dict(storage), output_file, indent=indent)
+        json.dump(payload, output_file, indent=indent)
     return output_path
 
 

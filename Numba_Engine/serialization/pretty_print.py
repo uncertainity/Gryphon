@@ -12,11 +12,37 @@ if TYPE_CHECKING:
     from ..output.statistics import (
         BaseGameStatistics,
         FeatureStatistics,
+        FullGameStatistics,
         HoldAndSpinStatistics,
     )
 
 
 _SYMBOL_NAMES = {value: key for key, value in REEL_DICT.items()}
+_JACKPOT_NAMES = {
+    0: "Mini",
+    1: "Minor",
+    2: "Major",
+    3: "Grand",
+}
+_HOLD_FEATURE_NAMES = {
+    -2: "Initial window",
+    -1: "Symbols landed",
+    0: "Splitter",
+    1: "Grower",
+    2: "Booster",
+    3: "Multiplier",
+    4: "Collector",
+    5: "Expansion",
+}
+_ROUTED_FEATURE_NAMES = (
+    "Splitter",
+    "Grow",
+    "Boost",
+    "Multiplier",
+    "Collect",
+    "Expansion",
+    "Mega Combo",
+)
 
 
 def _number(value):
@@ -25,11 +51,18 @@ def _number(value):
     return str(value)
 
 
-def _format_matrix(matrix, empty_marker, map_symbols=False):
+def _format_matrix(
+    matrix,
+    empty_marker,
+    map_symbols=False,
+    value_names=None,
+):
     display_rows = [
         [
             empty_marker
             if value == -1
+            else value_names.get(value, _number(value))
+            if value_names is not None
             else _SYMBOL_NAMES.get(value, _number(value))
             if map_symbols
             else _number(value)
@@ -73,6 +106,7 @@ def _append_matrix(
     matrix,
     empty_marker,
     map_symbols=False,
+    value_names=None,
 ):
     lines.append(f"    {label}:")
     lines.extend(
@@ -81,6 +115,7 @@ def _append_matrix(
             matrix,
             empty_marker,
             map_symbols=map_symbols,
+            value_names=value_names,
         ).splitlines()
     )
 
@@ -191,6 +226,33 @@ def _format_base_game_payload(payload, empty_marker):
                 spin["coin_value_board"],
                 empty_marker,
             )
+            _append_matrix(
+                lines,
+                "Jackpot overlays",
+                spin["jackpot_overlay_board"],
+                empty_marker,
+                value_names=_JACKPOT_NAMES,
+            )
+            before = spin["jackpot_values_before"]
+            after = spin["jackpot_values_after"]
+            increments = spin["jackpot_increment_counts"]
+            jackpot_transitions = ", ".join(
+                f"{_JACKPOT_NAMES.get(index, index)} "
+                f"{_number(start)}->{_number(end)}"
+                for index, (start, end) in enumerate(zip(before, after))
+            )
+            lines.append(
+                f"      Jackpot values: {jackpot_transitions}"
+            )
+            applied_overlays = [
+                f"{_JACKPOT_NAMES.get(index, index)}={count}"
+                for index, count in enumerate(increments)
+                if count
+            ]
+            lines.append(
+                "      Jackpot overlay counts: "
+                + (", ".join(applied_overlays) if applied_overlays else "none")
+            )
             for line_win in spin["winning_lines"]:
                 symbol = _SYMBOL_NAMES.get(
                     line_win["symbol"],
@@ -207,16 +269,6 @@ def _format_base_game_payload(payload, empty_marker):
 
 
 def _format_hold_and_spin_payload(payload, empty_marker):
-    feature_names = {
-        -2: "Initial window",
-        -1: "Symbols landed",
-        0: "Splitter",
-        1: "Grower",
-        2: "Booster",
-        3: "Multiplier",
-        4: "Collector",
-        5: "Expansion",
-    }
     lines = [
         "HOLD AND SPIN",
         f"Sessions: {payload['session_count']} | "
@@ -233,6 +285,20 @@ def _format_hold_and_spin_payload(payload, empty_marker):
             f"collector: {_number(session['collector_win'])} | "
             f"starting features: {starting_symbols}"
         )
+        final_meters = ", ".join(
+            f"{_JACKPOT_NAMES.get(index, index)}={value}/3"
+            for index, value in enumerate(session["jackpot_meters"])
+        )
+        awarded_names = [
+            _JACKPOT_NAMES.get(index, str(index))
+            for index, awarded in enumerate(session["jackpot_awards"])
+            if awarded
+        ]
+        lines.append(f"  Final jackpot meters: {final_meters}")
+        lines.append(
+            "  Jackpot types awarded: "
+            + (", ".join(awarded_names) if awarded_names else "none")
+        )
         for respin_position, respin in enumerate(session["respins"], start=1):
             lines.append(
                 f"  Respin {respin_position}/{session['total_respins']} | "
@@ -240,9 +306,36 @@ def _format_hold_and_spin_payload(payload, empty_marker):
                 f"{respin['remaining_after']} | "
                 f"reset: {'yes' if respin['reset'] else 'no'}"
             )
+            _append_matrix(
+                lines,
+                "Jackpot token overlays",
+                respin["jackpot_overlay_board"],
+                empty_marker,
+                value_names=_JACKPOT_NAMES,
+            )
+            meter_transitions = ", ".join(
+                f"{_JACKPOT_NAMES.get(index, index)} "
+                f"{before}->{after}"
+                for index, (before, after) in enumerate(
+                    zip(
+                        respin["jackpot_meters_before"],
+                        respin["jackpot_meters_after"],
+                    )
+                )
+            )
+            respin_awards = [
+                _JACKPOT_NAMES.get(index, str(index))
+                for index, awarded in enumerate(respin["jackpot_awards"])
+                if awarded
+            ]
+            lines.append(f"    Jackpot meters: {meter_transitions}")
+            lines.append(
+                "    Jackpot awards: "
+                + (", ".join(respin_awards) if respin_awards else "none")
+            )
             for step_position, step in enumerate(respin["steps"], start=1):
                 feature_type = step["feature_type"]
-                event_name = feature_names.get(
+                event_name = _HOLD_FEATURE_NAMES.get(
                     feature_type,
                     f"Feature {feature_type}",
                 )
@@ -266,6 +359,84 @@ def _format_hold_and_spin_payload(payload, empty_marker):
     return "\n".join(lines)
 
 
+def _format_full_game_payload(payload, empty_marker):
+    lines = [
+        "FULL GAME",
+        f"Rounds: {payload['round_count']} | Paid spins: "
+        f"{payload['spin_count']} | Features: "
+        f"{payload['feature_session_count']}",
+    ]
+    for round_position, round_result in enumerate(payload["rounds"], start=1):
+        lines.append(
+            f"Round {round_position} | total: "
+            f"{_number(round_result['total_win'])} | base: "
+            f"{_number(round_result['base_win'])} | feature: "
+            f"{_number(round_result['feature_win'])} | jackpots: "
+            f"{_number(round_result['jackpot_win'])}"
+        )
+        for spin_position, spin in enumerate(round_result["spins"], start=1):
+            base = spin["base_spin"]
+            lines.append(
+                f"  Paid spin {spin_position}/{len(round_result['spins'])} | "
+                f"total: {_number(spin['total_win'])} | "
+                f"base: {_number(spin['base_win'])} | "
+                f"feature: {_number(spin['feature_win'])} | "
+                f"jackpots: {_number(spin['jackpot_win'])}"
+            )
+            _append_matrix(
+                lines,
+                "Pay window",
+                base["board"],
+                empty_marker,
+                map_symbols=True,
+            )
+            _append_matrix(
+                lines,
+                "Base jackpot overlays",
+                base["jackpot_overlay_board"],
+                empty_marker,
+                value_names=_JACKPOT_NAMES,
+            )
+            increments = [
+                f"{_JACKPOT_NAMES.get(index, index)}={count}"
+                for index, count in enumerate(base["jackpot_increment_counts"])
+                if count
+            ]
+            lines.append(
+                "      Base jackpot increments: "
+                + (", ".join(increments) if increments else "none")
+            )
+            awards = [
+                f"{_JACKPOT_NAMES.get(index, index)}="
+                f"{_number(spin['jackpot_award_amounts'][index])}"
+                for index, awarded in enumerate(spin["jackpot_awards"])
+                if awarded
+            ]
+            lines.append(
+                "      Jackpot awards: "
+                + (", ".join(awards) if awards else "none")
+            )
+            transitions = ", ".join(
+                f"{_JACKPOT_NAMES.get(index, index)} "
+                f"{_number(before)}->{_number(after)}"
+                for index, (before, after) in enumerate(
+                    zip(
+                        spin["jackpot_values_before_feature"],
+                        spin["jackpot_values_after_feature"],
+                    )
+                )
+            )
+            lines.append(f"      Jackpot values after feature: {transitions}")
+            if spin["feature_routes"]:
+                lines.append(
+                    "      Routed features: "
+                    + ", ".join(spin["feature_routes"])
+                )
+    total_win = sum(result["total_win"] for result in payload["rounds"])
+    lines.extend(("", f"TOTAL WIN: {_number(total_win)}"))
+    return "\n".join(lines)
+
+
 def format_payload(payload: Mapping, empty_marker="##"):
     """Return a readable spin/cascade report without mutating ``payload``."""
     if not isinstance(payload, Mapping):
@@ -278,6 +449,8 @@ def format_payload(payload: Mapping, empty_marker="##"):
         return _format_base_game_payload(payload, empty_marker)
     if storage_type == "hold_and_spin":
         return _format_hold_and_spin_payload(payload, empty_marker)
+    if storage_type == "full_game":
+        return _format_full_game_payload(payload, empty_marker)
 
     lines = [
         f"Steps: {payload.get('step_count', 0)} | "
@@ -389,6 +562,17 @@ def format_base_game_statistics(statistics: BaseGameStatistics):
         f"Average active Collectors: {stats.average_collectors_per_spin:,.4f}",
         f"Collector-active spin rate:{stats.collector_active_spin_rate:>10.4%} "
         f"({stats.collector_active_spin_count:,}/{stats.spin_count:,})",
+        f"Jackpot-overlay spin rate: {stats.jackpot_overlay_spin_rate:>10.4%} "
+        f"({stats.jackpot_overlay_spin_count:,}/{stats.spin_count:,})",
+        f"Total jackpot overlays:    {stats.total_jackpot_overlays:,}",
+        f"Average overlays per spin: "
+        f"{stats.average_jackpot_overlays_per_spin:,.4f}",
+        f"Maximum overlays on spin:  "
+        f"{stats.maximum_jackpot_overlays_on_spin:,}",
+        f"Total jackpot value added: {stats.total_jackpot_value_increment:,.4f}",
+        f"Average value added/spin:  "
+        f"{stats.average_jackpot_value_increment_per_spin:,.4f}",
+        "Jackpot value additions are state changes, not base-game wins.",
         f"Maximum spin win:          {stats.maximum_win:,.4f}",
         f"RTP:                       {stats.rtp:.4%}",
         f"Hit rate:                  {stats.hit_rate:.4%} "
@@ -400,9 +584,45 @@ def format_base_game_statistics(statistics: BaseGameStatistics):
         f"Return standard deviation: {stats.return_standard_deviation:,.6f}",
         f"Average cascades:          {stats.average_cascades:,.4f}",
         f"Maximum cascades:          {stats.maximum_cascades:,}",
-        "",
-        "WIN HISTOGRAM (multiples of bet)",
     ]
+
+    lines.extend(("", "JACKPOT OVERLAYS BY TYPE"))
+    jackpot_rows = []
+    for jackpot_type, count in enumerate(stats.jackpot_overlay_counts):
+        share = (
+            int(count) / stats.total_jackpot_overlays
+            if stats.total_jackpot_overlays
+            else 0.0
+        )
+        jackpot_rows.append(
+            (
+                _JACKPOT_NAMES.get(jackpot_type, f"Type {jackpot_type}"),
+                f"{int(count):,}",
+                f"{share:.4%}",
+                f"{int(count) / stats.spin_count:.6f}",
+                f"{stats.jackpot_value_increments[jackpot_type]:,.4f}",
+            )
+        )
+    _table(
+        lines,
+        ("Jackpot", "Overlays", "% Overlays", "Per Spin", "Value Added"),
+        jackpot_rows,
+    )
+
+    lines.extend(("", "JACKPOT OVERLAY COUNT HISTOGRAM"))
+    overlay_count_rows = [
+        (
+            str(overlay_count),
+            f"{int(count):,}",
+            f"{int(count) / stats.spin_count:.4%}",
+        )
+        for overlay_count, count in enumerate(
+            stats.jackpot_overlay_count_histogram
+        )
+    ]
+    _table(lines, ("Overlays", "Spins", "% Spins"), overlay_count_rows)
+
+    lines.extend(("", "WIN HISTOGRAM (multiples of bet)"))
 
     win_rows = [
         (
@@ -573,9 +793,32 @@ def format_hold_and_spin_statistics(statistics: HoldAndSpinStatistics):
         f"({stats.reset_count:,}/{stats.respin_count:,})",
         f"Average starting features:      "
         f"{stats.average_starting_symbols:,.4f}",
-        "",
-        "SESSION WIN HISTOGRAM (multiples of session bet)",
+        f"Jackpot-token respin rate:       {stats.jackpot_token_respin_rate:.4%} "
+        f"({stats.jackpot_token_respin_count:,}/{stats.respin_count:,})",
+        f"Total jackpot tokens:            {stats.total_jackpot_tokens:,}",
+        f"Jackpot-award session rate:      {stats.jackpot_award_session_rate:.4%} "
+        f"({stats.jackpot_award_session_count:,}/{stats.session_count:,})",
+        "Jackpot awards are type events; monetary values are not included.",
     ]
+
+    lines.extend(("", "JACKPOT COLLECTIONS BY TYPE"))
+    jackpot_rows = [
+        (
+            _JACKPOT_NAMES.get(index, f"Type {index}"),
+            f"{int(stats.jackpot_token_counts[index]):,}",
+            f"{stats.average_final_jackpot_meters[index]:.4f}",
+            f"{int(stats.jackpot_award_counts[index]):,}",
+            f"{int(stats.jackpot_award_counts[index]) / stats.session_count:.4%}",
+        )
+        for index in range(len(stats.jackpot_token_counts))
+    ]
+    _table(
+        lines,
+        ("Jackpot", "Tokens", "Avg Final Meter", "Awards", "% Sessions"),
+        jackpot_rows,
+    )
+
+    lines.extend(("", "SESSION WIN HISTOGRAM (multiples of session bet)"))
 
     win_rows = [
         (
@@ -633,5 +876,95 @@ def pretty_print_hold_and_spin(
     """Print a readable Hold-and-Spin statistics report."""
     print(
         format_hold_and_spin_statistics(statistics),
+        file=sys.stdout if file is None else file,
+    )
+
+
+def format_full_game_statistics(statistics: FullGameStatistics):
+    """Return a readable integrated full-game statistics report."""
+    stats = statistics
+    lines = [
+        "FULL GAME STATISTICS",
+        f"Source: {stats.source_path}",
+        "",
+        f"Rounds:                    {stats.round_count:,}",
+        f"Paid spins:                {stats.spin_count:,}",
+        f"Feature sessions:          {stats.feature_session_count:,}",
+        f"Bet per paid spin:         {stats.bet_per_spin:,.4f}",
+        f"Total bet:                 {stats.total_bet:,.4f}",
+        f"Total win:                 {stats.total_win:,.4f}",
+        f"Base win / RTP:            {stats.total_base_win:,.4f} / "
+        f"{stats.base_rtp:.4%}",
+        f"Feature win / RTP:         {stats.total_feature_win:,.4f} / "
+        f"{stats.feature_rtp:.4%}",
+        f"Jackpot win / RTP:         {stats.total_jackpot_win:,.4f} / "
+        f"{stats.jackpot_rtp:.4%}",
+        f"Overall RTP:               {stats.rtp:.4%}",
+        f"Maximum paid-spin win:     {stats.maximum_spin_win:,.4f}",
+        f"Maximum round win:         {stats.maximum_round_win:,.4f}",
+        f"Hit rate:                  {stats.hit_rate:.4%} "
+        f"({stats.hit_count:,}/{stats.spin_count:,})",
+        f"Feature-trigger rate:      {stats.feature_trigger_rate:.4%} "
+        f"({stats.feature_spin_count:,}/{stats.spin_count:,})",
+        f"Jackpot awards:            {stats.total_jackpot_award_count:,}",
+        f"Return variance:           {stats.return_variance:,.6f}",
+        f"Return standard deviation: {stats.return_standard_deviation:,.6f}",
+    ]
+    if stats.feature_trigger_counts.any():
+        lines.extend(("", "FEATURE RESULTS BY TYPE"))
+        feature_rows = [
+            (
+                _ROUTED_FEATURE_NAMES[index],
+                f"{int(stats.feature_trigger_counts[index]):,}",
+                f"{int(stats.feature_spin_counts[index]):,}",
+                f"{stats.feature_win_amounts[index]:,.4f}",
+            )
+            for index in range(len(_ROUTED_FEATURE_NAMES))
+        ]
+        _table(
+            lines,
+            ("Feature", "Sessions", "Feature Spins", "Win"),
+            feature_rows,
+        )
+    lines.extend(("", "JACKPOT AWARDS BY TYPE"))
+    rows = [
+        (
+            _JACKPOT_NAMES.get(index, f"Type {index}"),
+            f"{int(count):,}",
+            f"{stats.jackpot_award_amounts[index]:,.4f}",
+        )
+        for index, count in enumerate(stats.jackpot_award_counts)
+    ]
+    _table(lines, ("Jackpot", "Awards", "Amount"), rows)
+    lines.extend(("", "PAID-SPIN WIN HISTOGRAM (multiples of bet)"))
+    rows = [
+        (
+            "0 (no win)",
+            f"{stats.zero_win_count:,}",
+            f"{stats.zero_win_count / stats.spin_count:.4%}",
+        )
+    ]
+    for index, count in enumerate(stats.win_histogram_counts):
+        rows.append(
+            (
+                _win_range_label(
+                    stats.win_histogram_edges[index],
+                    stats.win_histogram_edges[index + 1],
+                ),
+                f"{int(count):,}",
+                f"{int(count) / stats.spin_count:.4%}",
+            )
+        )
+    _table(lines, ("Win", "Count", "% Spins"), rows)
+    return "\n".join(lines)
+
+
+def pretty_print_full_game(
+    statistics: FullGameStatistics,
+    file: TextIO | None = None,
+):
+    """Print a readable integrated full-game statistics report."""
+    print(
+        format_full_game_statistics(statistics),
         file=sys.stdout if file is None else file,
     )

@@ -3,14 +3,8 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..core.config import (
-    BOOST_FEATURE_CONFIG,
-    COLLECT_FEATURE_CONFIG,
-    EXPANSION_FEATURE_CONFIG,
+    FEATURE_CONFIGS,
     FEATURE_RTP_CONFIG,
-    GROW_FEATURE_CONFIG,
-    MEGA_COMBO_FEATURE_CONFIG,
-    MULTIPLIER_FEATURE_CONFIG,
-    SPLITTER_FEATURE_CONFIG,
 )
 
 
@@ -57,8 +51,8 @@ def _coin_value(rules, rng):
     return float(_choice(rules.coin_values, rules.coin_value_probabilities, rng))
 
 
-def _feature_total(coin_win, jackpot_win):
-    return (coin_win + jackpot_win) * FEATURE_RTP_CONFIG.feature_payout_multiplier
+def _feature_total(coin_win, jackpot_win, payout_multiplier):
+    return (coin_win + jackpot_win) * payout_multiplier
 
 
 def _jackpot_index(symbol, jackpot_symbols):
@@ -117,7 +111,11 @@ def _seed_common_start(board, coin_values, trigger_symbol, rules, rng):
         coin_values[row, col] = _coin_value(rules, rng)
 
 
-def run_expansion_feature(rules=EXPANSION_FEATURE_CONFIG, seed=None):
+def run_expansion_feature(
+    rules=FEATURE_CONFIGS.expansion,
+    seed=None,
+    payout_multiplier=FEATURE_RTP_CONFIG.feature_payout_multiplier,
+):
     """Run the requested Expansion feature flow."""
     rng = np.random.default_rng(seed)
     board = np.full((rules.num_rows, rules.num_reels), EMPTY_SYMBOL, dtype=np.int16)
@@ -211,7 +209,7 @@ def run_expansion_feature(rules=EXPANSION_FEATURE_CONFIG, seed=None):
     return FeatureResult(
         board=board,
         coin_values=coin_values,
-        total_win=_feature_total(coin_win, jackpot_win),
+        total_win=_feature_total(coin_win, jackpot_win, payout_multiplier),
         total_spins=total_spins,
         jackpot_meters=jackpot_meters,
         awarded_jackpots=awarded_jackpots,
@@ -243,7 +241,11 @@ def _place_multipliers(multiplier_cells, rules, rng):
         )
 
 
-def run_multiplier_feature(rules=MULTIPLIER_FEATURE_CONFIG, seed=None):
+def run_multiplier_feature(
+    rules=FEATURE_CONFIGS.multiplier,
+    seed=None,
+    payout_multiplier=FEATURE_RTP_CONFIG.feature_payout_multiplier,
+):
     """Run the requested Multiplier feature flow."""
     rng = np.random.default_rng(seed)
     board = np.full((rules.num_rows, rules.num_reels), EMPTY_SYMBOL, dtype=np.int16)
@@ -310,7 +312,7 @@ def run_multiplier_feature(rules=MULTIPLIER_FEATURE_CONFIG, seed=None):
     return FeatureResult(
         board=board,
         coin_values=coin_values,
-        total_win=_feature_total(coin_win, jackpot_win),
+        total_win=_feature_total(coin_win, jackpot_win, payout_multiplier),
         total_spins=total_spins,
         jackpot_meters=jackpot_meters,
         awarded_jackpots=awarded_jackpots,
@@ -341,7 +343,11 @@ def _apply_jackpot_landing(board, expire_next, row, col, symbol, rules, meters, 
     return _collect_jackpot(symbol, meters, awarded, rules)
 
 
-def run_grow_feature(rules=GROW_FEATURE_CONFIG, seed=None):
+def run_grow_feature(
+    rules=FEATURE_CONFIGS.grow,
+    seed=None,
+    payout_multiplier=FEATURE_RTP_CONFIG.feature_payout_multiplier,
+):
     """Run the requested Grow feature flow."""
     rng = np.random.default_rng(seed)
     board = np.full((rules.num_rows, rules.num_reels), EMPTY_SYMBOL, dtype=np.int16)
@@ -421,7 +427,7 @@ def run_grow_feature(rules=GROW_FEATURE_CONFIG, seed=None):
     return FeatureResult(
         board=board,
         coin_values=coin_values,
-        total_win=_feature_total(coin_win, jackpot_win),
+        total_win=_feature_total(coin_win, jackpot_win, payout_multiplier),
         total_spins=total_spins,
         jackpot_meters=jackpot_meters,
         awarded_jackpots=awarded_jackpots,
@@ -431,7 +437,11 @@ def run_grow_feature(rules=GROW_FEATURE_CONFIG, seed=None):
     )
 
 
-def run_boost_feature(rules=BOOST_FEATURE_CONFIG, seed=None):
+def run_boost_feature(
+    rules=FEATURE_CONFIGS.boost,
+    seed=None,
+    payout_multiplier=FEATURE_RTP_CONFIG.feature_payout_multiplier,
+):
     """Run the requested Boost feature flow."""
     rng = np.random.default_rng(seed)
     board = np.full((rules.num_rows, rules.num_reels), EMPTY_SYMBOL, dtype=np.int16)
@@ -497,7 +507,7 @@ def run_boost_feature(rules=BOOST_FEATURE_CONFIG, seed=None):
     return FeatureResult(
         board=board,
         coin_values=coin_values,
-        total_win=_feature_total(coin_win, jackpot_win),
+        total_win=_feature_total(coin_win, jackpot_win, payout_multiplier),
         total_spins=total_spins,
         jackpot_meters=jackpot_meters,
         awarded_jackpots=awarded_jackpots,
@@ -507,7 +517,11 @@ def run_boost_feature(rules=BOOST_FEATURE_CONFIG, seed=None):
     )
 
 
-def run_collect_feature(rules=COLLECT_FEATURE_CONFIG, seed=None):
+def run_collect_feature(
+    rules=FEATURE_CONFIGS.collect,
+    seed=None,
+    payout_multiplier=FEATURE_RTP_CONFIG.feature_payout_multiplier,
+):
     """Run the requested Collect feature flow."""
     rng = np.random.default_rng(seed)
     board = np.full((rules.num_rows, rules.num_reels), EMPTY_SYMBOL, dtype=np.int16)
@@ -585,7 +599,7 @@ def run_collect_feature(rules=COLLECT_FEATURE_CONFIG, seed=None):
     return FeatureResult(
         board=board,
         coin_values=coin_values,
-        total_win=_feature_total(coin_win, jackpot_win),
+        total_win=_feature_total(coin_win, jackpot_win, payout_multiplier),
         total_spins=total_spins,
         jackpot_meters=jackpot_meters,
         awarded_jackpots=awarded_jackpots,
@@ -596,7 +610,11 @@ def run_collect_feature(rules=COLLECT_FEATURE_CONFIG, seed=None):
     )
 
 
-def run_splitter_feature(rules=SPLITTER_FEATURE_CONFIG, seed=None):
+def run_splitter_feature(
+    rules=FEATURE_CONFIGS.splitter,
+    seed=None,
+    payout_multiplier=FEATURE_RTP_CONFIG.feature_payout_multiplier,
+):
     """Run the requested Splitter feature flow."""
     rng = np.random.default_rng(seed)
     board = np.full((rules.num_rows, rules.num_reels), EMPTY_SYMBOL, dtype=np.int16)
@@ -683,7 +701,7 @@ def run_splitter_feature(rules=SPLITTER_FEATURE_CONFIG, seed=None):
     return FeatureResult(
         board=board,
         coin_values=coin_values,
-        total_win=_feature_total(coin_win, jackpot_win),
+        total_win=_feature_total(coin_win, jackpot_win, payout_multiplier),
         total_spins=total_spins,
         jackpot_meters=jackpot_meters,
         awarded_jackpots=awarded_jackpots,
@@ -740,8 +758,9 @@ def _place_combo_multiplier_cells(multiplier_cells, rules, rng):
 
 def run_mega_combo_feature(
     base_window=None,
-    rules=MEGA_COMBO_FEATURE_CONFIG,
+    rules=FEATURE_CONFIGS.mega_combo,
     seed=None,
+    payout_multiplier=FEATURE_RTP_CONFIG.feature_payout_multiplier,
 ):
     """Run the Mega/Combo feature, combining all six single-feature powers."""
     rng = np.random.default_rng(seed)
@@ -1073,7 +1092,7 @@ def run_mega_combo_feature(
     return FeatureResult(
         board=board,
         coin_values=coin_values,
-        total_win=_feature_total(coin_win, jackpot_win),
+        total_win=_feature_total(coin_win, jackpot_win, payout_multiplier),
         total_spins=total_spins,
         jackpot_meters=jackpot_meters,
         awarded_jackpots=awarded_jackpots,

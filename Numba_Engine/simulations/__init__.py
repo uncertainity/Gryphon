@@ -11,7 +11,6 @@ __all__ = [
     "run_parallel_num_sessions",
     "run_sessions",
     "select_starting_bag_symbols",
-    "extract_starting_bag_symbols",
     "run_boost_feature",
     "run_collect_feature",
     "run_expansion_feature",
@@ -109,7 +108,6 @@ def __getattr__(name):
         return exports[name]
 
     full_game_names = {
-        "extract_starting_bag_symbols",
         "run_full_game_sims",
         "run_full_rounds",
         "run_one_full_round",
@@ -117,7 +115,6 @@ def __getattr__(name):
     }
     if name in full_game_names:
         from .full_game import (
-            extract_starting_bag_symbols,
             run_full_rounds,
             run_one_full_round,
             run_sims,
@@ -125,7 +122,6 @@ def __getattr__(name):
         )
 
         exports = {
-            "extract_starting_bag_symbols": extract_starting_bag_symbols,
             "run_full_game_sims": run_sims,
             "run_full_rounds": run_full_rounds,
             "run_one_full_round": run_one_full_round,

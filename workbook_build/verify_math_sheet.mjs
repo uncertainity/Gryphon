@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import { FileBlob, SpreadsheetFile } from "@oai/artifact-tool";
 
-const outDir = "../outputs/01a0e390-5320-7f60-a764-9f9e6e056dd0";
+const outDir = "../config_render";
 const input = await FileBlob.load(`${outDir}/Gryphon_math_sheet.xlsx`);
 const workbook = await SpreadsheetFile.importXlsx(input);
 

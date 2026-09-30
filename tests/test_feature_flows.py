@@ -5,11 +5,13 @@ from Numba_Engine import (
     BOOST_FEATURE_CONFIG,
     COLLECT_FEATURE_CONFIG,
     EXPANSION_FEATURE_CONFIG,
+    FEATURE_CONFIGS,
     FEATURE_COIN_VALUE_PROBABILITIES,
     FEATURE_COIN_VALUES,
     GROW_FEATURE_CONFIG,
     GROW_VALUE_PROBABILITIES,
     GROW_VALUES,
+    FULL_GAME_CONFIG,
     MEGA_COMBO_FEATURE_CONFIG,
     MULTIPLIER_FEATURE_CONFIG,
     REEL_DICT,
@@ -23,6 +25,38 @@ from Numba_Engine import (
     run_splitter_feature,
 )
 from Numba_Engine.simulations.base_game import convert_base_scatters
+from Numba_Engine.simulations.free_game import run_configured_features
+
+
+def test_feature_settings_are_routed_through_full_game_config():
+    assert FULL_GAME_CONFIG.features is FEATURE_CONFIGS
+    assert FEATURE_CONFIGS.expansion is EXPANSION_FEATURE_CONFIG
+    assert FEATURE_CONFIGS.multiplier is MULTIPLIER_FEATURE_CONFIG
+    assert FEATURE_CONFIGS.grow is GROW_FEATURE_CONFIG
+    assert FEATURE_CONFIGS.boost is BOOST_FEATURE_CONFIG
+    assert FEATURE_CONFIGS.collect is COLLECT_FEATURE_CONFIG
+    assert FEATURE_CONFIGS.splitter is SPLITTER_FEATURE_CONFIG
+    assert FEATURE_CONFIGS.mega_combo is MEGA_COMBO_FEATURE_CONFIG
+    assert FEATURE_CONFIGS.splitter.trigger_symbol == REEL_DICT["SC1"]
+    assert FEATURE_CONFIGS.grow.trigger_symbol == REEL_DICT["SC2"]
+    assert FEATURE_CONFIGS.boost.trigger_symbol == REEL_DICT["SC3"]
+    assert FEATURE_CONFIGS.multiplier.trigger_symbol == REEL_DICT["SC4"]
+    assert FEATURE_CONFIGS.collect.trigger_symbol == REEL_DICT["SC5"]
+    assert FEATURE_CONFIGS.expansion.trigger_symbol == REEL_DICT["SC6"]
+    np.testing.assert_array_equal(
+        FEATURE_CONFIGS.mega_combo.trigger_symbols,
+        np.array(
+            [
+                REEL_DICT["SC1"],
+                REEL_DICT["SC2"],
+                REEL_DICT["SC3"],
+                REEL_DICT["SC4"],
+                REEL_DICT["SC5"],
+                REEL_DICT["SC6"],
+            ],
+            dtype=np.int16,
+        ),
+    )
 
 
 def test_base_scatter_converts_to_weighted_feature_symbol():
@@ -45,11 +79,50 @@ def test_base_scatter_converts_to_weighted_feature_symbol():
     assert not combo_triggered
 
 
+def test_sc7_does_not_bypass_the_combo_requirements():
+    board = np.full((3, 5), REEL_DICT["H1"], dtype=np.int16)
+    board[0, 0] = REEL_DICT["SC7"]
+    flags = np.zeros(7, dtype=np.bool_)
+    flags[6] = True
+
+    routed = run_configured_features(
+        board,
+        flags,
+        combo_triggered=False,
+        config=FULL_GAME_CONFIG,
+        random_generator=np.random.default_rng(7),
+    )
+
+    assert routed == []
+
+
+def test_all_six_converted_scatters_always_launch_combo():
+    assert BASE_GAME_CONFIG.combo_feature_probability == 1.0
+    board = np.full((3, 5), REEL_DICT["H1"], dtype=np.int16)
+    for position, symbol_name in enumerate(
+        ("SC1", "SC2", "SC3", "SC4", "SC5", "SC6")
+    ):
+        board.ravel()[position] = REEL_DICT[symbol_name]
+
+    _, _, combo_triggered = convert_base_scatters(
+        board,
+        BASE_GAME_CONFIG,
+    )
+
+    assert combo_triggered
+
+
 def test_feature_coin_value_average_is_above_one():
     assert np.isclose(FEATURE_COIN_VALUE_PROBABILITIES.sum(), 1.0)
     assert np.dot(FEATURE_COIN_VALUES, FEATURE_COIN_VALUE_PROBABILITIES) > 1.0
     assert np.isclose(GROW_VALUE_PROBABILITIES.sum(), 1.0)
     assert np.all(np.diff(GROW_VALUES) > 0)
+
+
+def test_feature_payout_multiplier_is_supplied_by_configuration():
+    unscaled = run_expansion_feature(seed=91, payout_multiplier=1.0)
+    scaled = run_expansion_feature(seed=91, payout_multiplier=2.0)
+    assert np.isclose(scaled.total_win, unscaled.total_win * 2.0)
 
 
 def test_expansion_feature_respects_go_limits_and_grid_shape():

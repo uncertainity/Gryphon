@@ -1,0 +1,18 @@
+category,component,target_rtp,target_base_game_hit_rate,target_hold_and_spin_trigger_rate,target_trigger_odds_1_in,internal_lane_probability,internal_lane_odds_1_in,target_conditional_mean_win,source,notes
+base,Base paylines,0.35119557999142814,,,,,,,Gryphon config_render,Part of the combined base-game hit-rate target
+base,Base Collect,0.20055065999993657,,,,,,,Gryphon config_render,Part of the combined base-game hit-rate target
+feature,Splitter,0.047373901305687895,,,,0.0016,625,29.608688316054934,Gryphon config_render adjusted for jackpot budget,Internal lane allocation is not the Hold-and-Spin trigger rate
+feature,Grow,0.05562645413334176,,,,0.0016,625,34.766533833338599,Gryphon config_render adjusted for jackpot budget,Internal lane allocation is not the Hold-and-Spin trigger rate
+feature,Boost,0.039683299080131344,,,,0.0016,625,24.802061925082089,Gryphon config_render adjusted for jackpot budget,Internal lane allocation is not the Hold-and-Spin trigger rate
+feature,Multiplier,0.045479309623871117,,,,0.0016,625,28.424568514919446,Gryphon config_render adjusted for jackpot budget,Internal lane allocation is not the Hold-and-Spin trigger rate
+feature,Feature Collect,0.070976599704425075,,,,0.0016,625,44.360374815265672,Gryphon config_render adjusted for jackpot budget,Internal lane allocation is not the Hold-and-Spin trigger rate
+feature,Expansion,0.082317292603611675,,,,0.0016,625,51.448307877257292,Gryphon config_render adjusted for jackpot budget,Internal lane allocation is not the Hold-and-Spin trigger rate
+feature,Mega Combo,0.033956860091523218,,,,0.0004,2500,84.892150228808035,Gryphon config_render adjusted for jackpot budget,Internal lane allocation is not the Hold-and-Spin trigger rate
+jackpot,Mini,0.0070375153386310696,,,,,,,,ReelsAvenue jackpot RTP distribution,Target RTP only; Gryphon hit rate must be tuned for 3-token collection
+jackpot,Minor,0.0035498215532517902,,,,,,,,ReelsAvenue jackpot RTP distribution,Target RTP only; mapped from donor Midi and tuned for Gryphon 3-token collection
+jackpot,Major,0.0018522139080280741,,,,,,,,ReelsAvenue jackpot RTP distribution,Target RTP only; mapped from donor Maxi and tuned for Gryphon 3-token collection
+jackpot,Grand,0.0006013417579849628,,,,,,,,ReelsAvenue jackpot RTP distribution,Target RTP only; Gryphon hit rate must be tuned for 3-token collection
+summary,Base subtotal,0.5517462399913647,0.23758546,,,,,,,Gryphon RTP plus ReelsAvenue hit-rate reference,Base hit means any positive base-game award per paid spin
+summary,Non-jackpot feature subtotal,0.3754137165425921,,0.01,100,,,,,Gryphon config_render,Hold-and-Spin trigger rate is per paid spin
+summary,Jackpot subtotal,0.013040892557895896,,,,,,,,Calculated,ReelsAvenue jackpot target redistributed to Gryphon jackpot names
+summary,Total RTP,0.9402008490918528,,,,,,,,Calculated,Jackpot RTP is carved out of the original feature budget

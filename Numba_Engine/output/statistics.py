@@ -223,6 +223,7 @@ class FullGameStatistics:
     round_count: int
     spin_count: int
     feature_session_count: int
+    feature_spin_count: int
     bet_per_spin: float
     total_bet: float
     total_win: float
@@ -238,6 +239,9 @@ class FullGameStatistics:
     hit_count: int
     hit_rate: float
     feature_trigger_rate: float
+    feature_trigger_counts: np.ndarray
+    feature_win_amounts: np.ndarray
+    feature_spin_counts: np.ndarray
     jackpot_award_counts: np.ndarray
     jackpot_award_amounts: np.ndarray
     total_jackpot_award_count: int
@@ -969,7 +973,7 @@ def store_full_game(
         spin_feature = np.asarray(data["spin_feature_wins"], dtype=np.float64)
         spin_jackpot = np.asarray(data["spin_jackpot_wins"], dtype=np.float64)
         spin_total = np.asarray(data["spin_total_wins"], dtype=np.float64)
-        awards = np.asarray(data["spin_jackpot_awards"], dtype=np.bool_)
+        awards = np.asarray(data["spin_jackpot_awards"], dtype=np.int64)
         award_amounts = np.asarray(
             data["spin_jackpot_award_amounts"], dtype=np.float64
         )
@@ -982,6 +986,32 @@ def store_full_game(
             data["round_jackpot_wins"], dtype=np.float64
         )
         round_total = np.asarray(data["round_total_wins"], dtype=np.float64)
+        if all(
+            key in data
+            for key in (
+                "spin_feature_masks",
+                "feature_trigger_counts",
+                "feature_win_amounts",
+                "feature_spin_counts",
+            )
+        ):
+            feature_masks = np.asarray(
+                data["spin_feature_masks"], dtype=np.int16
+            )
+            feature_trigger_counts = np.asarray(
+                data["feature_trigger_counts"], dtype=np.int64
+            )
+            feature_win_amounts = np.asarray(
+                data["feature_win_amounts"], dtype=np.float64
+            )
+            feature_spin_counts = np.asarray(
+                data["feature_spin_counts"], dtype=np.int64
+            )
+        else:
+            feature_masks = None
+            feature_trigger_counts = np.zeros(7, dtype=np.int64)
+            feature_win_amounts = np.zeros(7, dtype=np.float64)
+            feature_spin_counts = np.zeros(7, dtype=np.int64)
 
     if spin_count < 1 or round_count < 1:
         raise ValueError("Full-game NPZ must contain spins and rounds")
@@ -996,9 +1026,11 @@ def store_full_game(
             raise ValueError(f"Full-game {name} do not match spin_count")
     if awards.ndim != 2 or awards.shape[0] != spin_count:
         raise ValueError("Full-game jackpot awards have an invalid shape")
+    if np.any(awards < 0):
+        raise ValueError("Full-game jackpot award counts cannot be negative")
     if award_amounts.shape != awards.shape:
         raise ValueError("Full-game jackpot award amounts have an invalid shape")
-    if np.any(award_amounts[~awards] != 0.0):
+    if np.any(award_amounts[awards == 0] != 0.0):
         raise ValueError("Unawarded jackpot types must have zero award amounts")
     if not np.allclose(spin_jackpot, award_amounts.sum(axis=1)):
         raise ValueError("Jackpot wins do not reconcile with jackpot awards")
@@ -1039,7 +1071,23 @@ def store_full_game(
     )
     total_bet = float(spin_count * bet_per_spin)
     total_win = float(spin_total.sum(dtype=np.float64))
-    feature_count = int(np.count_nonzero(feature_indices >= 0))
+    feature_spin_count = int(np.count_nonzero(feature_indices >= 0))
+    if feature_masks is not None:
+        if feature_masks.shape != (spin_count,):
+            raise ValueError("Full-game feature masks have an invalid shape")
+        if not (
+            feature_trigger_counts.shape
+            == feature_win_amounts.shape
+            == feature_spin_counts.shape
+            == (7,)
+        ):
+            raise ValueError("Full-game feature aggregates have an invalid shape")
+        feature_count = int(feature_trigger_counts.sum())
+        feature_spin_count = int(np.count_nonzero(feature_masks))
+        if not np.isclose(feature_win_amounts.sum(), spin_feature.sum()):
+            raise ValueError("Feature wins do not reconcile by feature type")
+    else:
+        feature_count = feature_spin_count
     hit_count = int(positive_wins.size)
     jackpot_award_counts = awards.sum(axis=0, dtype=np.int64)
     jackpot_award_amounts = award_amounts.sum(axis=0, dtype=np.float64)
@@ -1048,6 +1096,7 @@ def store_full_game(
         round_count=round_count,
         spin_count=spin_count,
         feature_session_count=feature_count,
+        feature_spin_count=feature_spin_count,
         bet_per_spin=float(bet_per_spin),
         total_bet=total_bet,
         total_win=total_win,
@@ -1062,7 +1111,10 @@ def store_full_game(
         maximum_round_win=float(round_total.max()),
         hit_count=hit_count,
         hit_rate=hit_count / spin_count,
-        feature_trigger_rate=feature_count / spin_count,
+        feature_trigger_rate=feature_spin_count / spin_count,
+        feature_trigger_counts=feature_trigger_counts,
+        feature_win_amounts=feature_win_amounts,
+        feature_spin_counts=feature_spin_counts,
         jackpot_award_counts=jackpot_award_counts,
         jackpot_award_amounts=jackpot_award_amounts,
         total_jackpot_award_count=int(jackpot_award_counts.sum()),

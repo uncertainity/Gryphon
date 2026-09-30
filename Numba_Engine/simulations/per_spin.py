@@ -115,7 +115,7 @@ def run_full_game(
         config.base_game.reelset_path,
         config.base_game,
     )
-    base_storage, free_storage, full_storage = _new_storages(1, config)
+    base_storage, full_storage = _new_storages(1, config)
     if jackpot_values is None:
         jackpot_values = config.jackpots.seed_values.copy()
     else:
@@ -128,14 +128,9 @@ def run_full_game(
         config,
         jackpot_values,
         base_storage,
-        free_storage,
         full_storage,
     )
-    payload = full_game_storage_to_dict(
-        full_storage,
-        base_storage,
-        free_storage,
-    )
+    payload = full_game_storage_to_dict(full_storage, base_storage)
     if print_result:
         pretty_print(payload, empty_marker="**")
 
@@ -149,7 +144,6 @@ def run_full_game(
     return (
         result,
         base_storage,
-        free_storage,
         full_storage,
         jackpot_values,
         payload,
@@ -190,7 +184,6 @@ def play_full_game_session(input_function=input):
             flush=True,
         )
         (
-            _,
             _,
             _,
             _,

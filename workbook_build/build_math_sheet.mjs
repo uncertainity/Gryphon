@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import { SpreadsheetFile, Workbook } from "@oai/artifact-tool";
 
-const outputDir = "../outputs/01a0e390-5320-7f60-a764-9f9e6e056dd0";
+const outputDir = "../config_render";
 const outputPath = `${outputDir}/Gryphon_math_sheet.xlsx`;
 const previewPath = `${outputDir}/Gryphon_math_sheet_summary.png`;
 const font = "Arial";
