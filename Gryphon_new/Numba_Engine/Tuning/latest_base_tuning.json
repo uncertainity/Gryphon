@@ -1,0 +1,11 @@
+{
+  "spins": 10000000,
+  "line_rtp": 0.35119557999142814,
+  "collect_rtp": 0.20055065999993657,
+  "collector_frequency": 0.0528272,
+  "average_collectors_on_collector_spin": 1.362326604476482,
+  "coin_window_frequency": 0.3111971,
+  "average_coin_count_when_dropped": 4.239477167364349,
+  "average_coin_count_per_spin": 1.319313,
+  "sc_window_frequency": 0.0490243
+}
