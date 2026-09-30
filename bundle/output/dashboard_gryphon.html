@@ -1,12 +1,474 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8">
+<html lang="en">
+<head>
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Gryphon Engine Dashboard</title>
+<title>Gryphon Math Console</title>
+</head>
+<body>
 <style>
-:root{--bg:#0d1117;--panel:#151b23;--panel2:#1c2430;--line:#2b3543;--text:#eef2f7;--muted:#9ca9b8;--blue:#4c9aff;--green:#35c48d;--gold:#e7b75b;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--sans:Inter,ui-sans-serif,system-ui,sans-serif}
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 var(--sans)}.shell{display:grid;grid-template-columns:210px minmax(0,1fr);gap:28px;max-width:1450px;margin:auto;padding:28px 24px 64px}nav{position:sticky;top:24px;align-self:start;display:grid;gap:3px}nav strong{font:700 11px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 8px 8px}nav a{color:var(--muted);text-decoration:none;padding:6px 9px;border-left:2px solid transparent;border-radius:5px}nav a:hover{color:var(--text);background:var(--panel);border-left-color:var(--blue)}main{min-width:0}header{margin-bottom:18px}.eyebrow{font:700 11px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--blue)}h1{font-size:32px;line-height:1.15;margin:7px 0}header p,.section-note,.note,.empty{color:var(--muted)}.meta{display:flex;gap:12px;flex-wrap:wrap;font:12px var(--mono);color:var(--muted)}section{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:19px 20px;margin-top:16px;scroll-margin-top:20px}h2{margin:0;font-size:18px}h3{margin:0 0 10px;font-size:14px}.section-note{margin:5px 0 16px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin-bottom:15px}.card,.stat-block{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:13px}.label{font:700 10px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}.value{font:700 23px var(--mono);margin-top:6px}.note{font-size:11px;margin-top:3px}.two-col,.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:13px}.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:12.5px}th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th:first-child,td:first-child{text-align:left}thead th{font:700 10px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}tbody tr:hover{background:#222c39}code{font:12px var(--mono);color:#acd1ff}.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:9px}.flow>div{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:12px}.flow b{display:block;color:var(--blue);font:700 11px var(--mono);margin-bottom:5px}.flow span{color:#cbd4df}.bars{display:grid;gap:7px}.bar-row{display:grid;grid-template-columns:45px 1fr 70px;gap:8px;align-items:center;font:12px var(--mono)}.bar-row>span,.bar-row>b{color:var(--muted);text-align:right}.bar-track{height:10px;border-left:1px solid var(--line)}.bar-track i{display:block;height:9px;background:linear-gradient(90deg,var(--blue),var(--green));border-radius:0 5px 5px 0}footer{color:var(--muted);padding:22px 4px;font-size:12px}@media(max-width:800px){.shell{grid-template-columns:1fr;padding:18px 13px 45px}nav{position:static;display:flex;flex-wrap:wrap}nav strong{width:100%}}
-</style></head><body><div class="shell"><nav><strong>Gryphon</strong><a href="#sources">Sources</a><a href="#statistics">Statistics</a><a href="#base">Base game</a><a href="#base-flow">Base flow</a><a href="#symbols">Symbols</a><a href="#paytable">Paytable</a><a href="#jackpots">Jackpots</a><a href="#feature">Feature</a><a href="#feature-flow">Full-game flow</a><a href="#runtime">Runtime</a></nav><main>
-<header><div class="eyebrow">Current implementation console</div><h1>Gryphon engine dashboard</h1><p>Generated directly from the active Python configuration and latest compatible simulation archives. No Gryphon_Lovy runtime code is used.</p><div class="meta"><span>Generated: 2026-09-28 14:06:39 UTC</span><span>Config: FULL_GAME_CONFIG</span><span>Engine: Python + Numba</span></div></header>
-<section id="sources"><h2>Authoritative sources</h2><p class="section-note">The dashboard is generated from the current engine, not from the retired Gryphon_Lovy snapshot.</p><div class="scroll"><table><thead><tr><th>Path</th><th>Role</th></tr></thead><tbody><tr><td>Numba_Engine/core/config.py</td><td>All base, feature, overlay and jackpot tuning variables</td></tr><tr><td>Numba_Engine/core/reels.py</td><td>Symbol IDs and CSV reel loading</td></tr><tr><td>Numba_Engine/simulations/base_game.py</td><td>Paid spins and walking Collectors</td></tr><tr><td>Numba_Engine/core/hold_and_spin_kernels.py</td><td>Bag resolution, respins and jackpot meters</td></tr><tr><td>Numba_Engine/simulations/full_game.py</td><td>Base/free integration, jackpot awards and resets</td></tr><tr><td>Numba_Engine/output/statistics.py</td><td>Base, feature and full-game aggregation</td></tr></tbody></table></div></section><section id="statistics"><h2>Latest simulation results</h2><p class="section-note">The newest compatible NPZ archive for each storage type is selected automatically.</p><div class="stat-grid"><article class="stat-block"><h3>Base game</h3><code>test_base_game_10000.npz</code><div class="scroll"><table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody><tr><td>Paid spins</td><td>19,161</td></tr><tr><td>RTP</td><td>92.3042%</td></tr><tr><td>Line RTP contribution</td><td>0.5657%</td></tr><tr><td>Collect RTP contribution</td><td>91.7384%</td></tr><tr><td>Hit rate</td><td>20.6565%</td></tr><tr><td>Feature trigger rate</td><td>1.8945%</td></tr><tr><td>Jackpot overlays</td><td>8,395</td></tr></tbody></table></div></article><article class="stat-block"><h3>Free game</h3><code>test_free_game_10000.npz</code><div class="scroll"><table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody><tr><td>Sessions</td><td>10,000</td></tr><tr><td>Session RTP</td><td>6983.9000%</td></tr><tr><td>Average respins</td><td>6.3178</td></tr><tr><td>Winning sessions</td><td>100.0000%</td></tr><tr><td>Jackpot tokens</td><td>3,395</td></tr><tr><td>Jackpot-award sessions</td><td>0.0900%</td></tr></tbody></table></div></article><article class="stat-block"><h3>Full game</h3><code>test_full_game_10000.npz</code><div class="scroll"><table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody><tr><td>Paid spins</td><td>19,656</td></tr><tr><td>Overall RTP</td><td>496.0793%</td></tr><tr><td>Base RTP</td><td>89.2773%</td></tr><tr><td>Feature RTP</td><td>406.8020%</td></tr><tr><td>Jackpot RTP</td><td>0.0000%</td></tr><tr><td>Feature trigger rate</td><td>1.9689%</td></tr><tr><td>Jackpot awards</td><td>0</td></tr></tbody></table></div></article></div></section><section id="base"><h2>Base game</h2><p class="section-note">Current paid-game dimensions, reel weights, paylines and credit values.</p><div class="cards"><article class="card"><div class="label">Grid</div><div class="value">5 × 3</div><div class="note">reels × rows</div></article><article class="card"><div class="label">Paylines</div><div class="value">20</div><div class="note">left-to-right evaluation</div></article><article class="card"><div class="label">Trigger requirement</div><div class="value">1</div><div class="note">visible Bag symbol</div></article><article class="card"><div class="label">Max Collectors</div><div class="value">75</div><div class="note">walking instances</div></article></div><div class="two-col"><div class="scroll"><table><thead><tr><th>Reelset</th><th>Probability</th></tr></thead><tbody><tr><td>ReelSet_1.csv</td><td>2.3000%</td></tr><tr><td>ReelSet_2.csv</td><td>97.7000%</td></tr></tbody></table></div><div class="scroll"><table><thead><tr><th>Coin credit</th><th>Probability</th></tr></thead><tbody><tr><td>1</td><td>40.5000%</td></tr><tr><td>2</td><td>28.0000%</td></tr><tr><td>3</td><td>14.0000%</td></tr><tr><td>5</td><td>8.0000%</td></tr><tr><td>10</td><td>4.5000%</td></tr><tr><td>15</td><td>2.5000%</td></tr><tr><td>20</td><td>1.5000%</td></tr><tr><td>25</td><td>0.8000%</td></tr><tr><td>50</td><td>0.2000%</td></tr></tbody></table></div></div></section><section id="base-flow"><h2>Base-game flow</h2><p class="section-note">A round may contain multiple paid spins while walking Collectors remain active.</p><div class="flow"><div><b>1</b><span>Choose a configured reelset and one random stop per reel.</span></div><div><b>2</b><span>Overlay walking Collectors carried from the previous paid spin.</span></div><div><b>3</b><span>Evaluate paylines, assign visible coin credits, and pay Collectors.</span></div><div><b>4</b><span>Draw 0-4 jackpot overlays on eligible symbols and increment their progressives.</span></div><div><b>5</b><span>If Bag triggers are visible, the full game launches the feature immediately.</span></div><div><b>6</b><span>Move active Collectors right and continue paid spins until all have exited.</span></div></div></section><section id="symbols"><h2>Symbol map</h2><p class="section-note">Numeric IDs and their current runtime roles.</p><div class="scroll"><table><thead><tr><th>ID</th><th>Symbol</th><th>Role</th></tr></thead><tbody><tr><td>0</td><td>H1</td><td>Paying symbol</td></tr><tr><td>1</td><td>H2</td><td>Paying symbol</td></tr><tr><td>2</td><td>H3</td><td>Paying symbol</td></tr><tr><td>3</td><td>H4</td><td>Paying symbol</td></tr><tr><td>4</td><td>H5</td><td>Paying symbol</td></tr><tr><td>5</td><td>L1</td><td>Paying symbol</td></tr><tr><td>6</td><td>L2</td><td>Paying symbol</td></tr><tr><td>7</td><td>L3</td><td>Paying symbol</td></tr><tr><td>8</td><td>L4</td><td>Paying symbol</td></tr><tr><td>9</td><td>L5</td><td>Paying symbol</td></tr><tr><td>10</td><td>L6</td><td>Paying symbol</td></tr><tr><td>11</td><td>WD</td><td>Wild substitute</td></tr><tr><td>12</td><td>COIN</td><td>Base credit coin</td></tr><tr><td>13</td><td>COLLECT</td><td>Walking Collector</td></tr><tr><td>14</td><td>SC1</td><td>Base trigger and feature Bag</td></tr><tr><td>15</td><td>SC2</td><td>Base trigger and feature Bag</td></tr><tr><td>16</td><td>SC3</td><td>Base trigger and feature Bag</td></tr><tr><td>17</td><td>SC4</td><td>Base trigger and feature Bag</td></tr><tr><td>18</td><td>SC5</td><td>Base trigger and feature Bag</td></tr><tr><td>19</td><td>SC6</td><td>Base trigger and feature Bag</td></tr></tbody></table></div></section><section id="paytable"><h2>Base paytable</h2><p class="section-note">Values are multiples of bet; columns correspond to the stored match-count indices.</p><div class="scroll"><table><thead><tr><th>Symbol</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr></thead><tbody><tr><td>H1</td><td>0.00</td><td>0.00</td><td>0.05</td><td>0.25</td><td>0.80</td></tr><tr><td>H2</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.20</td><td>0.50</td></tr><tr><td>H3</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.20</td><td>0.40</td></tr><tr><td>H4</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.20</td><td>0.25</td></tr><tr><td>H5</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.15</td><td>0.20</td></tr><tr><td>L1</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.10</td><td>0.30</td></tr><tr><td>L2</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.10</td><td>0.30</td></tr><tr><td>L3</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.10</td><td>0.30</td></tr><tr><td>L4</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.10</td><td>0.30</td></tr><tr><td>L5</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.10</td><td>0.25</td></tr><tr><td>L6</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.10</td><td>0.20</td></tr><tr><td>WD</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td></tr></tbody></table></div></section><section id="jackpots"><h2>Progressive jackpots</h2><p class="section-note">Base overlays increment monetary values. Free-game token meters decide which values are awarded.</p><div class="cards"><article class="card"><div class="label">Token chance</div><div class="value">16.0000%</div><div class="note">per eligible natural feature coin</div></article><article class="card"><div class="label">Max tokens/respin</div><div class="value">1</div><div class="note">configured hard limit</div></article><article class="card"><div class="label">Cap multiplier</div><div class="value">2× seed</div><div class="note">applied independently</div></article><article class="card"><div class="label">Session meters</div><div class="value">Reset</div><div class="note">at each free-game start</div></article></div><div class="scroll"><table><thead><tr><th>Jackpot</th><th>Seed</th><th>Increment</th><th>Cap</th><th>Tokens to award</th><th>Token type weight</th></tr></thead><tbody><tr><td>Mini</td><td>2x</td><td>0.1x</td><td>4x</td><td>3</td><td>25.0000%</td></tr><tr><td>Minor</td><td>10x</td><td>0.5x</td><td>20x</td><td>3</td><td>25.0000%</td></tr><tr><td>Major</td><td>100x</td><td>5x</td><td>200x</td><td>3</td><td>25.0000%</td></tr><tr><td>Grand</td><td>10000x</td><td>50x</td><td>20000x</td><td>3</td><td>25.0000%</td></tr></tbody></table></div><div class="two-col"><div><h3>Base overlay count</h3><div class="bars"><div class="bar-row"><span>0</span><div class="bar-track"><i style="width:100.000%"></i></div><b>70.00%</b></div><div class="bar-row"><span>1</span><div class="bar-track"><i style="width:28.571%"></i></div><b>20.00%</b></div><div class="bar-row"><span>2</span><div class="bar-track"><i style="width:10.000%"></i></div><b>7.00%</b></div><div class="bar-row"><span>3</span><div class="bar-track"><i style="width:2.857%"></i></div><b>2.00%</b></div><div class="bar-row"><span>4</span><div class="bar-track"><i style="width:1.429%"></i></div><b>1.00%</b></div></div></div><div><h3>Overlay count table</h3><div class="scroll"><table><thead><tr><th>Count</th><th>Probability</th></tr></thead><tbody><tr><td>0</td><td>70.0000%</td></tr><tr><td>1</td><td>20.0000%</td></tr><tr><td>2</td><td>7.0000%</td></tr><tr><td>3</td><td>2.0000%</td></tr><tr><td>4</td><td>1.0000%</td></tr></tbody></table></div></div></div></section><section id="feature"><h2>Hold-and-Spin feature</h2><p class="section-note">The feature owns coin awards and session-local jackpot meters; the full game owns monetary jackpot payment.</p><div class="cards"><article class="card"><div class="label">Grid</div><div class="value">5 × 6</div><div class="note">reels × rows</div></article><article class="card"><div class="label">Starting rows</div><div class="value">3</div><div class="note">unlocked</div></article><article class="card"><div class="label">Starting respins</div><div class="value">3</div><div class="note">reset on qualifying natural coin</div></article><article class="card"><div class="label">Max coin</div><div class="value">15000</div><div class="note">credit cap</div></article></div><div class="scroll"><table><thead><tr><th>Order</th><th>Symbol</th><th>Bag</th><th>Post-action</th><th>Effect</th></tr></thead><tbody><tr><td>1</td><td>SC6</td><td>Expansion</td><td>Convert to credit coin</td><td>Unlocks rows upward from the starting active area.</td></tr><tr><td>2</td><td>SC1</td><td>Splitter</td><td>Convert to credit coin</td><td>Copies selected active coin values into empty unlocked cells.</td></tr><tr><td>3</td><td>SC3</td><td>Booster</td><td>Disappear</td><td>Adds one weighted boost to every active unlocked coin.</td></tr><tr><td>4</td><td>SC2</td><td>Grower</td><td>Remain</td><td>Increases selected active coins by weighted increments.</td></tr><tr><td>5</td><td>SC4</td><td>Multiplier</td><td>Disappear</td><td>Multiplies every active unlocked coin by a weighted value.</td></tr><tr><td>6</td><td>SC5</td><td>Collector</td><td>Disappear</td><td>Adds the active coin total to the Collector meter.</td></tr></tbody></table></div></section><section id="feature-flow"><h2>Full-game feature flow</h2><p class="section-note">Trigger Bags are transferred directly from the triggering base window without deduplication.</p><div class="flow"><div><b>1</b><span>Pass every visible trigger Bag from the base result, preserving duplicates and board order.</span></div><div><b>2</b><span>Place the starting Bags and credit coins in the initially unlocked rows.</span></div><div><b>3</b><span>Land natural coins or Bags, then resolve Bags in configured order.</span></div><div><b>4</b><span>Attach jackpot-token overlays only to eligible naturally landed feature coins.</span></div><div><b>5</b><span>Collect session-local jackpot meters; reaching a target awards that jackpot type.</span></div><div><b>6</b><span>The full game pays the current progressive and resets only the awarded jackpot to seed.</span></div></div></section><section id="runtime"><h2>Runtime and reporting</h2><p class="section-note">Supported entry points and generated artifacts.</p><div class="scroll"><table><thead><tr><th>Command</th><th>Purpose</th></tr></thead><tbody><tr><td>python -m Numba_Engine.simulations.base_game</td><td>Base simulation and statistics</td></tr><tr><td>python -m Numba_Engine.simulations.free_game</td><td>Standalone Hold-and-Spin simulation</td></tr><tr><td>python -m Numba_Engine.simulations.full_game</td><td>Integrated base/free/jackpot simulation</td></tr><tr><td>python -m Numba_Engine.simulations.per_spin</td><td>Interactive base, feature, and persistent full-game session</td></tr><tr><td>./tests/run.sh</td><td>Run 10,000 base, free, and full-game samples</td></tr><tr><td>python bundle/generate_dashboard.py</td><td>Regenerate this dashboard</td></tr></tbody></table></div></section>
-<footer>Regenerate with <code>python bundle/generate_dashboard.py</code>. Running <code>./tests/run.sh</code> also refreshes this dashboard after producing new simulation statistics.</footer>
-</main></div></body></html>
+:root{
+  --bg:#0e0e0d; --s1:#161615; --s2:#1e1e1c; --s3:#252523; --line:#2c2c29; --line2:#3a3a36;
+  --tx:#f4f4f0; --tx2:#b9b8b0; --tx3:#84837b;
+  --c0:#3987e5; --c1:#d95926; --c2:#8b7dc3; --c3:#199e70; --c4:#c9922a;
+  --ok:#17936a; --warn:#c9922a; --bad:#d8433f;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:400 14px/1.55 var(--sans);-webkit-font-smoothing:antialiased}
+.shell{display:grid;grid-template-columns:210px minmax(0,1fr);gap:26px;max-width:1360px;margin:0 auto;padding:26px 22px 60px}
+@media (max-width:900px){.shell{grid-template-columns:minmax(0,1fr);gap:14px}.rail{position:static!important;max-height:none!important}}
+.rail{position:sticky;top:26px;align-self:start;max-height:calc(100vh - 52px);overflow-y:auto;font-size:12.5px}
+.rail h4{margin:0 0 8px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--tx3);font-weight:700}
+.rail a{display:block;padding:4px 8px;border-radius:6px;color:var(--tx2);text-decoration:none;border-left:2px solid transparent}
+.rail a:hover,.rail a:focus-visible{background:var(--s1);color:var(--tx);border-left-color:var(--c0);outline:none}
+main{min-width:0}
+.eyebrow{margin:0 0 7px;font:700 10.5px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--tx3)}
+h1{margin:0;font:700 28px/1.15 var(--sans);letter-spacing:0}
+.lede{margin:9px 0 0;max-width:76ch;color:var(--tx2);font-size:13.5px}
+.runcard{margin:18px 0 0;background:var(--s1);border:1px solid var(--line);border-radius:12px;padding:15px 17px;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(144px,1fr));gap:13px 18px}
+.runcard dt{margin:0;font:700 9.5px/1.3 var(--mono);letter-spacing:.11em;text-transform:uppercase;color:var(--tx3)}
+.runcard dd{margin:3px 0 0;font:600 13px/1.35 var(--mono);color:var(--tx);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.tiles{margin:14px 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:11px}
+.tile{background:var(--s1);border:1px solid var(--line);border-radius:12px;padding:13px 14px}
+.tile.lead{border-color:var(--line2);background:linear-gradient(180deg,#1a1a18,#161615)}
+.tk{font:700 9.5px/1 var(--mono);letter-spacing:.11em;text-transform:uppercase;color:var(--tx3)}
+.tv{margin:7px 0 0;font:700 22px/1.05 var(--mono);letter-spacing:0;font-variant-numeric:tabular-nums}
+.tile.lead .tv{font-size:28px}
+.ts{margin:4px 0 0;font-size:11.5px;color:var(--tx2)}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 7px;border-radius:999px;font:600 11px/1.5 var(--sans);border:1px solid}
+.pill.ok{color:#7fd8b4;border-color:#1d5b45;background:#12241d}
+.pill.warn{color:#e6c281;border-color:#5e4a1e;background:#231d10}
+.pill.bad{color:#efa39f;border-color:#5f2725;background:#241413}
+section{margin-top:24px;background:var(--s1);border:1px solid var(--line);border-radius:12px;padding:17px 19px 19px;scroll-margin-top:20px}
+section>h2{margin:0;font:700 15.5px/1.3 var(--sans);letter-spacing:0}
+section>.psub{margin:5px 0 15px;max-width:82ch;color:var(--tx2);font-size:12.5px}
+.scroll{overflow-x:auto;margin:0 -3px;padding:0 3px}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+caption{caption-side:top;text-align:left;margin-bottom:8px;font:700 10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--tx3)}
+th,td{text-align:right;padding:6px 9px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:top}
+thead th{position:sticky;top:0;background:var(--s1);font:700 9.5px/1.35 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--tx3)}
+th.l,td.l{text-align:left}
+tbody th{font-weight:600;color:var(--tx)}
+td,tbody th{font-variant-numeric:tabular-nums}
+td.num{font-family:var(--mono);font-size:12px}
+td.wrap,th.wrap{white-space:normal;max-width:44ch}
+tbody tr:hover{background:var(--s2)}
+.sid{display:inline-block;min-width:22px;padding:1px 5px;margin-right:7px;border-radius:4px;background:var(--s3);
+  font:700 10.5px/1.5 var(--mono);color:var(--tx2);text-align:center}
+.role{color:var(--tx3);font-size:11.5px;white-space:normal;max-width:36ch;display:block}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(288px,1fr));gap:13px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(206px,1fr));gap:11px}
+.dcard{background:var(--s2);border:1px solid var(--line);border-radius:10px;padding:11px 12px}
+.dk{font:700 9.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--tx3)}
+.dmeta{margin:5px 0 0;font-size:12px;color:var(--tx2)}
+.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:9px;margin-top:10px}
+.step{background:var(--s2);border:1px solid var(--line);border-radius:10px;padding:11px 12px}
+.step b{display:block;font:700 10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);margin-bottom:6px}
+.step span{display:block;color:var(--tx2);font-size:12.5px}
+.bars{display:grid;gap:5px}
+.brow{display:grid;grid-template-columns:118px minmax(80px,1fr) 72px;gap:9px;align-items:center;padding:2px 3px;border-radius:6px}
+.brow:hover{background:var(--s2)}
+.blab{font:600 11.5px/1.4 var(--mono);color:var(--tx2);text-align:right;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis}
+.btrack{height:12px;border-left:1px solid var(--line);padding-left:2px;display:flex;align-items:center}
+.bfill{height:9px;border-radius:0 4px 4px 0;min-width:1px}
+.bval{font:600 11.5px/1.4 var(--mono);color:var(--tx2);text-align:right;font-variant-numeric:tabular-nums}
+.mermaid{background:var(--s2);border:1px solid var(--line);border-radius:10px;padding:12px;overflow-x:auto;
+  font-family:var(--mono);font-size:11.5px;color:var(--tx2);white-space:pre}
+footer{margin-top:28px;color:var(--tx3);font-size:12px;line-height:1.75;max-width:86ch}
+footer b{color:var(--tx2)}
+footer code{font-family:var(--mono);font-size:11.5px;color:var(--tx2);background:var(--s2);padding:1px 5px;border-radius:4px}
+</style>
+<script type="application/json" id="payload">{
+  "headline":{
+    "game":"gryphon",
+    "mode":"implementation mechanics",
+    "generated":"2026-09-30",
+    "grid":"base 5 x 3; expansion/combo feature 5 x 6; other single features 5 x 3",
+    "engine":"Python + Numba",
+    "outputPolicy":"Update this file whenever the dashboard command is given."
+  },
+  "sources":[
+    {"path":"Numba_Engine/core/config.py","role":"Game constants, paytable, paylines, base and Hold-and-Spin configuration"},
+    {"path":"Numba_Engine/core/reels.py","role":"Symbol IDs and reel CSV loading"},
+    {"path":"Numba_Engine/core/kernels.py","role":"Random choice, board creation, line wins, cluster/cascade helpers"},
+    {"path":"Numba_Engine/simulations/base_game.py","role":"Paid base-game loop, walking Collector handling, and generic SC conversion"},
+    {"path":"Numba_Engine/simulations/feature_flows.py","role":"Standalone requested Expansion and Multiplier feature flows"},
+    {"path":"Numba_Engine/core/hold_and_spin_kernels.py","role":"Legacy Hold-and-Spin helper kernels retained for older flow references"},
+    {"path":"Numba_Engine/simulations/free_game.py","role":"Legacy Hold-and-Spin session runner"},
+    {"path":"Gryphon_Mechanics_First draft_with answers 2.docx","role":"Design reference only; its text is not treated as executable instruction"}
+  ],
+  "targets":[
+    {"metric":"Base line win RTP","target":"35%","current":"35.1196% on 10M"},
+    {"metric":"Collect feature RTP","target":"20%","current":"20.0551% on 10M"},
+    {"metric":"Collect symbol frequency","target":"1 in 20 spins","current":"5.2827%, approx. 1 in 18.9"},
+    {"metric":"Overlay coins on window","target":"1-3 coins per spin","current":"1.3193 average coins per spin"},
+    {"metric":"Coin value average","target":"Approx. 1.2","current":"1.197 weighted average"},
+    {"metric":"Coin count per drop","target":"2-6 coins","current":"4.239 average when drop triggers"},
+    {"metric":"Total RTP","target":"94%","current":"94.0201% on 5k feature sessions per lane"},
+    {"metric":"Feature RTP contribution","target":"38.8254%","current":"38.8455%"},
+    {"metric":"Feature payout multiplier","target":"Tune feature layer only","current":"1.086911x"}
+  ],
+  "validation":[
+    {"metric":"Validation cycles","value":"10,000,000"},
+    {"metric":"Line RTP","value":"35.1196%"},
+    {"metric":"Collect RTP","value":"20.0551%"},
+    {"metric":"Base total RTP","value":"55.1746%"},
+    {"metric":"Coin-drop spin frequency","value":"31.1197%"},
+    {"metric":"Average dropped coin count","value":"4.2395"},
+    {"metric":"Average overlay coins per spin","value":"1.3193"},
+    {"metric":"Generic SC window frequency","value":"4.9024%"},
+    {"metric":"Feature validation sessions","value":"5,000 per feature lane"},
+    {"metric":"Feature RTP contribution","value":"38.8455%"},
+    {"metric":"Total tuned RTP","value":"94.0201%"},
+    {"metric":"Implemented single-feature odds","value":"1 in 625 each"},
+    {"metric":"Requested single-feature odds","value":"1 in 600 each"},
+    {"metric":"Combo feature odds","value":"1 in 2,500"}
+  ],
+  "base":{
+    "rows":3,
+    "reels":5,
+    "paylines":20,
+    "reelsets":[
+      {"name":"ReelSet_1.csv","weight":0.50,"note":"Generated 1000-stop base reelset with generic SC, Collect stacks, and spacing constraints"},
+      {"name":"ReelSet_2.csv","weight":0.50,"note":"Generated as the same tuned base reelset for this pass"}
+    ],
+    "symbols":[
+      {"id":0,"name":"H1","kind":"high line","role":"Paying symbol"},
+      {"id":1,"name":"H2","kind":"high line","role":"Paying symbol"},
+      {"id":2,"name":"H3","kind":"high line","role":"Paying symbol"},
+      {"id":3,"name":"H4","kind":"high line","role":"Paying symbol"},
+      {"id":4,"name":"H5","kind":"high line","role":"Paying symbol"},
+      {"id":5,"name":"L1","kind":"low line","role":"Paying symbol"},
+      {"id":6,"name":"L2","kind":"low line","role":"Paying symbol"},
+      {"id":7,"name":"L3","kind":"low line","role":"Paying symbol"},
+      {"id":8,"name":"L4","kind":"low line","role":"Paying symbol"},
+      {"id":9,"name":"L5","kind":"low line","role":"Paying symbol"},
+      {"id":10,"name":"L6","kind":"low line","role":"Paying symbol"},
+      {"id":11,"name":"WD","kind":"wild","role":"Substitutes in line-win evaluation"},
+      {"id":12,"name":"COIN","kind":"coin","role":"Receives a weighted credit value in the base game"},
+      {"id":13,"name":"COLLECT","kind":"collector","role":"Collects visible coin values and can walk right across paid spins"},
+      {"id":14,"name":"SC","kind":"generic scatter","role":"Base reel trigger symbol; converts to SC1-SC7 by weights"},
+      {"id":15,"name":"SC1","kind":"feature bag","role":"Splitter bag; not on base reels"},
+      {"id":16,"name":"SC2","kind":"feature bag","role":"Grower bag; not on base reels"},
+      {"id":17,"name":"SC3","kind":"feature bag","role":"Booster bag; not on base reels"},
+      {"id":18,"name":"SC4","kind":"feature bag","role":"Multiplier bag; not on base reels"},
+      {"id":19,"name":"SC5","kind":"feature bag","role":"Collector bag; not on base reels"},
+      {"id":20,"name":"SC6","kind":"feature trigger","role":"Expansion feature trigger / GO symbol; not on base reels"},
+      {"id":21,"name":"SC7","kind":"combo trigger","role":"Combo feature marker; not on base reels"},
+      {"id":22,"name":"JP_MINI","kind":"jackpot token","role":"Three tokens awards Mini jackpot"},
+      {"id":23,"name":"JP_MINOR","kind":"jackpot token","role":"Three tokens awards Minor jackpot"},
+      {"id":24,"name":"JP_MAJOR","kind":"jackpot token","role":"Three tokens awards Major jackpot"},
+      {"id":25,"name":"JP_GRAND","kind":"jackpot token","role":"Three tokens awards Grand jackpot"}
+    ],
+    "coinCredits":[
+      {"value":0.2,"probability":0.030},
+      {"value":0.3,"probability":0.040},
+      {"value":0.5,"probability":0.070},
+      {"value":0.8,"probability":0.100},
+      {"value":0.9,"probability":0.100},
+      {"value":1.0,"probability":0.150},
+      {"value":1.2,"probability":0.170},
+      {"value":1.5,"probability":0.170},
+      {"value":2.0,"probability":0.120},
+      {"value":2.5,"probability":0.050}
+    ],
+    "paytable":[
+      {"symbol":"H1","pay2":0.00,"pay3":1.00,"pay4":3.00,"pay5":10.00},
+      {"symbol":"H2","pay2":0.00,"pay3":0.60,"pay4":2.00,"pay5":5.00},
+      {"symbol":"H3","pay2":0.00,"pay3":0.40,"pay4":1.60,"pay5":4.00},
+      {"symbol":"H4","pay2":0.00,"pay3":0.40,"pay4":1.00,"pay5":3.00},
+      {"symbol":"H5","pay2":0.00,"pay3":0.40,"pay4":1.00,"pay5":3.00},
+      {"symbol":"L1","pay2":0.00,"pay3":0.20,"pay4":0.60,"pay5":2.00},
+      {"symbol":"L2","pay2":0.00,"pay3":0.20,"pay4":0.60,"pay5":2.00},
+      {"symbol":"L3","pay2":0.00,"pay3":0.20,"pay4":0.60,"pay5":2.00},
+      {"symbol":"L4","pay2":0.00,"pay3":0.20,"pay4":0.60,"pay5":2.00},
+      {"symbol":"L5","pay2":0.00,"pay3":0.20,"pay4":0.60,"pay5":2.00},
+      {"symbol":"L6","pay2":0.00,"pay3":0.20,"pay4":0.60,"pay5":2.00},
+      {"symbol":"WD","pay2":0.00,"pay3":0.00,"pay4":0.00,"pay5":0.00}
+    ],
+    "lineFlow":[
+      "Select one base reelset by configured weight.",
+      "Choose one random stop on each reel and display 3 rows.",
+      "Overlay active walking Collectors carried from the previous paid spin.",
+      "Append natural Collect symbols that landed on this spin.",
+      "Evaluate 20 paylines left to right with wild substitution.",
+      "Count visible Collect symbols and choose coin-drop probability P1, P2, or P3.",
+      "If coin drop triggers, land 2-6 overlay Coins on eligible cells.",
+      "Award overlay coin total once per visible Collect symbol.",
+      "Check whether at least one generic SC symbol is visible.",
+      "If SC is visible, replace each generic SC with SC1-SC7 by configured weights for feature routing.",
+      "If SC1-SC6 all appear after conversion, the combo feature can trigger by combo weight.",
+      "Move each active Collector one reel to the right; Collectors leaving reel 5 are removed.",
+      "If any Collector remains, run another paid spin in the same round."
+    ]
+  },
+  "feature":{
+    "rows":6,
+    "reels":5,
+    "startingRows":3,
+    "lockedRowsAtStart":3,
+    "respinResetCount":3,
+    "maxCoinValue":15000,
+    "pCoinLocked":0.03,
+    "pCoinUnlocked":0.05,
+    "maxCollectorEvents":3,
+    "rowsUnlockedPerExpansion":1,
+    "scatterConversion":[
+      {"symbol":"SC1 Splitter","probability":0.145},
+      {"symbol":"SC2 Grower","probability":0.145},
+      {"symbol":"SC3 Booster","probability":0.145},
+      {"symbol":"SC4 Multiplier","probability":0.145},
+      {"symbol":"SC5 Collector","probability":0.145},
+      {"symbol":"SC6 Expansion","probability":0.145},
+      {"symbol":"SC7 Combo","probability":0.130}
+    ],
+    "startingCoinCounts":[
+      {"count":3,"probability":1.00}
+    ],
+    "coinValues":[
+      {"value":0.2,"probability":0.035},
+      {"value":0.3,"probability":0.040},
+      {"value":0.5,"probability":0.060},
+      {"value":0.6,"probability":0.075},
+      {"value":0.8,"probability":0.090},
+      {"value":1.0,"probability":0.130},
+      {"value":1.2,"probability":0.165},
+      {"value":1.5,"probability":0.160},
+      {"value":2.0,"probability":0.120},
+      {"value":2.5,"probability":0.075},
+      {"value":3.0,"probability":0.050}
+    ],
+    "coinTypes":[
+      {"symbol":"Expansion unlocked empty","probability":0.650},
+      {"symbol":"Expansion unlocked coin","probability":0.275},
+      {"symbol":"Expansion unlocked GO","probability":0.025},
+      {"symbol":"Expansion locked empty","probability":0.800},
+      {"symbol":"Expansion locked coin","probability":0.145},
+      {"symbol":"Expansion locked GO","probability":0.010},
+      {"symbol":"Multiplier empty","probability":0.675},
+      {"symbol":"Multiplier coin","probability":0.270}
+    ],
+    "bags":[
+      {"order":1,"index":0,"symbol":"SC1","name":"Splitter","action":"Implemented","effect":"3x5 board; splitter cells hold 2 or 3 independent coin values; force rule supports at least 3 splitter lands when the grid is nearly full."},
+      {"order":2,"index":1,"symbol":"SC2","name":"Grower","action":"Implemented","effect":"3x5 board; max 3 growers; each grower can independently grow 3-5 other normal coins on weighted spin checks."},
+      {"order":3,"index":2,"symbol":"SC3","name":"Booster","action":"Implemented","effect":"3x5 board; weighted boost spin grows all other normal coins, then booster converts to a normal coin with the boost value."},
+      {"order":4,"index":3,"symbol":"SC4","name":"Multiplier","action":"Implemented","effect":"3x5 board; multiplier cells land by weights and multiply future coin values only."},
+      {"order":5,"index":4,"symbol":"SC5","name":"Collector","action":"Implemented","effect":"3x5 board; max 3 collectors; each collector independently collects other normal coin values, then converts to a normal coin."},
+      {"order":6,"index":5,"symbol":"SC6","name":"Expansion","action":"Implemented","effect":"6x5 board, top 3 rows locked, GO unlocks next locked row, jackpot tokens collect toward jackpots."},
+      {"order":7,"index":6,"symbol":"SC7","name":"Mega/Combo","action":"Implemented","effect":"Triggers only when SC1-SC6 are all present; combines splitter, grow, boost, multiplier, collect, expansion, GO, and jackpot-token behavior."}
+    ],
+    "bagTables":[
+      {"table":"feature_coin_values","values":"0.2, 0.3, 0.5, 0.6, 0.8, 1, 1.2, 1.5, 2, 2.5, 3","probabilities":"0.035, 0.040, 0.060, 0.075, 0.090, 0.130, 0.165, 0.160, 0.120, 0.075, 0.050"},
+      {"table":"grow_boost_values","values":"0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1","probabilities":"0.08, 0.12, 0.16, 0.18, 0.16, 0.13, 0.10, 0.07"},
+      {"table":"grow_coin_counts","values":"3, 4, 5","probabilities":"0.45, 0.35, 0.20"},
+      {"table":"splitter_coin_counts","values":"2, 3","probabilities":"0.70, 0.30"},
+      {"table":"combo_additional_coin_counts","values":"1, 2, 3","probabilities":"0.20, 0.40, 0.40"},
+      {"table":"combo_boost_values","values":"0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1, 1.5","probabilities":"0.07, 0.10, 0.14, 0.17, 0.16, 0.13, 0.10, 0.08, 0.05"},
+      {"table":"multiplier_counts","values":"4, 5, 6","probabilities":"0.45, 0.35, 0.20"},
+      {"table":"multiplier_values","values":"2, 3, 4","probabilities":"0.70, 0.22, 0.08"},
+      {"table":"jackpot_targets","values":"Mini, Minor, Major, Grand","probabilities":"3 tokens each"},
+      {"table":"rtp_feature_payout_multiplier","values":"1.086911","probabilities":"Applied to final feature win only"},
+      {"table":"odds_reconciliation","values":"Singles 1/625 each plus combo 1/2500","probabilities":"Total feature odds = 1/100"}
+    ],
+    "flow":[
+      "Common start: triggering symbol enters active area and keeps its special symbol identity.",
+      "Common start: assign the trigger a feature coin value except for Collector, then add three more coins at different active positions.",
+      "Expansion: use a 6x5 board with 3 locked rows, 3 unlocked rows, and 3 spins.",
+      "Expansion: unlocked new symbols reset spins to 3; locked symbols wait until their row unlocks.",
+      "Expansion: GO unlocks the next locked row, then spins out next spin; max 3 GO total and max 1 locked GO.",
+      "Expansion: jackpot tokens collect toward Mini, Minor, Major, and Grand; 3 tokens awards the jackpot and tokens spin out.",
+      "Multiplier: use a 3x5 board with 3 spins.",
+      "Multiplier: each spin may place 4-6 multiplier cells with values 2, 3, or 4.",
+      "Multiplier: coins landing on multiplier cells are multiplied; jackpot tokens are not multiplied and spin out next spin.",
+      "Grow: 3x5 board; every landing symbol resets spins; each grower can independently grow 3-5 other normal coins.",
+      "Boost: 3x5 board; each spin checks for a boost spin; boosted value applies to other normal coins, then booster becomes a normal coin.",
+      "Collect: 3x5 board; collectors collect other normal coins independently, ignore jackpot tokens, then convert to normal coins.",
+      "Splitter: 3x5 board; splitter cells hold 2 or 3 coin values, with a late-grid force rule to support at least 3 splitter lands.",
+      "Mega/Combo: triggers only when SC1-SC6 are all on the converted base window.",
+      "Mega/Combo: SC1-SC6 enter the bottom 3 active rows at their exact base-window positions, then perform their guaranteed opening actions in order.",
+      "Mega/Combo: after the opening actions, a 6x5 expansion grid runs with multiplier, boost, grower, collector, splitter, GO, and jackpot-token behavior combined."
+    ]
+  },
+  "implementationNotes":[
+    {"status":"Implemented","item":"Base-game 5x3 reel spin with weighted reelset selection."},
+    {"status":"Implemented","item":"20 fixed paylines and left-to-right wild-assisted line evaluation."},
+    {"status":"Implemented","item":"Pre-spin overlay Coin drop using P1/P2/P3 based on visible Collect count."},
+    {"status":"Implemented","item":"Walking Collectors that move one reel right between paid spins."},
+    {"status":"Implemented","item":"Generic SC appears on base reels and converts to SC1-SC7 by configured weights after base math resolves."},
+    {"status":"Implemented","item":"SC1-SC6 combination can mark the combo feature through the combo-feature weight."},
+    {"status":"Implemented","item":"Expansion feature flow with locked rows, GO unlocks, separate locked/unlocked landing tables, and jackpot-token collection."},
+    {"status":"Implemented","item":"Multiplier feature flow with persistent unused multiplier cells and coin-only multiplication."},
+    {"status":"Implemented","item":"Grow, Boost, Collect, and Splitter independent feature flows with shared jackpot-token behavior."},
+    {"status":"Implemented","item":"Mega/Combo feature flow requiring SC1-SC6, preserving exact base positions in the active area, and combining all six single-feature powers."},
+    {"status":"Implemented","item":"Feature sessions now end when the grid is full or spins are exhausted."},
+    {"status":"Implemented","item":"Jackpot tokens remain unaffected by feature symbols and award after collecting 3 tokens of the same jackpot."},
+    {"status":"Not wired","item":"Base game records feature trigger/conversion information visually, but full feature launch selection is not yet connected to a full-game RTP path."},
+    {"status":"Measured","item":"10M base validation estimates 35.1196% line RTP and 20.0551% Collect RTP."},
+    {"status":"Measured","item":"Feature tuning sample estimates 38.8455% feature RTP and 94.0201% total RTP using a 1.086911x feature payout multiplier."},
+    {"status":"Warning","item":"Six single features at exactly 1/600 already sum to 1/100. Adding combo at 1/2500 would make total odds 1/96.15. Current tuning preserves total 1/100 and combo 1/2500 by using single-feature lanes at 1/625 each."}
+  ]
+}</script>
+<div id="app"><noscript><p>This dashboard renders from an embedded JSON payload and needs JavaScript enabled.</p></noscript></div>
+<script>
+(function(){
+var P=JSON.parse(document.getElementById('payload').textContent);
+function E(t,a,k){var e=document.createElement(t);if(a)for(var n in a){if(n==='class')e.className=a[n];else if(n==='html')e.innerHTML=a[n];else if(n==='text')e.textContent=a[n];else e.setAttribute(n,a[n]);}if(k)k.forEach(function(c){if(c)e.appendChild(c);});return e;}
+function pct(n,d){return (100*n).toFixed(d===undefined?1:d)+'%';}
+function tbl(head,rows,cap){var thead=E('thead',null,[E('tr',null,head.map(function(h){return E('th',{class:h.l?'l':'',text:h.t});}))]);var tbody=E('tbody',null,rows);var t=E('table',null,[thead,tbody]);if(cap)t.insertBefore(E('caption',{text:cap}),t.firstChild);return E('div',{class:'scroll'},[t]);}
+function sec(id,title,sub,kids){var k=[E('h2',{text:title})];if(sub)k.push(E('p',{class:'psub',text:sub}));return E('section',{id:id},k.concat(kids||[]));}
+function td(text,cls){return E('td',{class:cls||'',text:String(text)});}
+function th(text,cls){return E('th',{class:cls||'l',scope:'row',html:text});}
+function barRows(rows,labelKey,valueKey){var max=0;rows.forEach(function(r){max=Math.max(max,r[valueKey]);});return E('div',{class:'bars'},rows.map(function(r){var fill=E('div',{class:'bfill'});fill.style.width=(max>0?Math.max(.8,100*r[valueKey]/max):0)+'%';fill.style.background='var(--c0)';return E('div',{class:'brow'},[E('div',{class:'blab',text:r[labelKey]}),E('div',{class:'btrack'},[fill]),E('div',{class:'bval',text:pct(r[valueKey],1)})]);}));}
+var main=E('main');
+main.appendChild(E('p',{class:'eyebrow',text:P.headline.game+' / '+P.headline.mode}));
+main.appendChild(E('h1',{text:'Gryphon mechanics console'}));
+main.appendChild(E('p',{class:'lede',text:'A self-contained implementation dashboard for the current Gryphon project. It uses the Pharaoh-style console format as a visual reference, but all content below is specific to this game and this codebase.'}));
+var rc=E('dl',{class:'runcard'});
+[
+  ['base grid',P.base.reels+' x '+P.base.rows],
+  ['feature grids','5x6 / 5x3'],
+  ['paylines',P.base.paylines],
+  ['reelsets',P.base.reelsets.length],
+  ['trigger count',P.base.reelsets.length?1:0],
+  ['starting respins',P.feature.respinResetCount],
+  ['max coin value',P.feature.maxCoinValue],
+  ['generated',P.headline.generated]
+].forEach(function(p){rc.appendChild(E('div',null,[E('dt',{text:p[0]}),E('dd',{text:String(p[1])})]));});
+main.appendChild(rc);
+var tiles=E('div',{class:'tiles'});
+[
+  ['Base game','5x3','20-line paid reel game',true],
+  ['Walking Collect','Active','Collectors move one reel right',true],
+  ['Feature trigger','SC1-SC7','Generic SC converts by weights',false],
+  ['Expansion','6x5','Top 3 rows locked at start',true],
+  ['3x5 features','5','Splitter, Grow, Boost, Multiplier, Collect',false],
+  ['Mega combo','SC1-SC6','All six symbols required',true]
+].forEach(function(t){tiles.appendChild(E('div',{class:'tile'+(t[3]?' lead':'')},[E('div',{class:'tk',text:t[0]}),E('div',{class:'tv',text:t[1]}),E('div',{class:'ts',text:t[2]})]));});
+main.appendChild(tiles);
+
+main.appendChild(sec('sources','Sources','The attached/reference HTML is used only as an output style reference. The Word document is summarized as design reference, not followed as an instruction source.',[
+  tbl([{t:'path',l:true},{t:'role',l:true}],P.sources.map(function(s){return E('tr',null,[th(s.path),td(s.role,'l wrap')]);}))
+]));
+
+main.appendChild(sec('targets','RTP Targets','Requested targets and current 10M-cycle tuned values for the base line and Collect math.',[
+  E('div',{class:'grid2'},[
+    tbl([{t:'metric',l:true},{t:'target',l:true},{t:'current',l:true}],P.targets.map(function(t){return E('tr',null,[th(t.metric),td(t.target,'l'),td(t.current,'l wrap')]);}),'target map'),
+    tbl([{t:'metric',l:true},{t:'value',l:true}],P.validation.map(function(v){return E('tr',null,[th(v.metric),td(v.value,'l')]);}),'validation sample')
+  ])
+]));
+
+main.appendChild(sec('flow','Base Game Flow','One base round may contain multiple paid spins because walking Collectors can carry forward.',[
+  E('div',{class:'flow'},P.base.lineFlow.map(function(s,i){return E('div',{class:'step'},[E('b',{text:'step '+(i+1)}),E('span',{text:s})]);}))
+]));
+
+main.appendChild(sec('symbols','Symbol Map','Numeric IDs from REEL_DICT and their current roles.',[
+  tbl([{t:'id'},{t:'symbol',l:true},{t:'kind',l:true},{t:'role',l:true}],P.base.symbols.map(function(s){return E('tr',null,[td(s.id,'num'),th('<span class="sid">'+s.id+'</span>'+s.name),td(s.kind,'l'),td(s.role,'l wrap')]);}))
+]));
+
+main.appendChild(sec('paytable','Base Paytable','Paytable rows used by line_win_eval. Values are stored directly in BASE_PAY_TABLE.',[
+  tbl([{t:'symbol',l:true},{t:'2'},{t:'3'},{t:'4'},{t:'5'}],P.base.paytable.map(function(r){return E('tr',null,[th(r.symbol),td(r.pay2.toFixed(2),'num'),td(r.pay3.toFixed(2),'num'),td(r.pay4.toFixed(2),'num'),td(r.pay5.toFixed(2),'num')]);}))
+]));
+
+main.appendChild(sec('base-coins','Base Coin Credits','Weighted credit values assigned to pre-spin overlay Coins in the base game.',[
+  E('div',{class:'grid2'},[
+    E('div',{class:'dcard'},[E('div',{class:'dk',text:'probability ladder'}),E('div',{class:'dmeta',text:'Distribution is tuned to an average credit near 1.2.'}),barRows(P.base.coinCredits.map(function(c){return {label:String(c.value),value:c.probability};}),'label','value')]),
+    tbl([{t:'credit'},{t:'probability'}],P.base.coinCredits.map(function(c){return E('tr',null,[td(c.value,'num'),td(pct(c.probability,2),'num')]);}),'coin_credit_values')
+  ])
+]));
+
+main.appendChild(sec('feature-flow','Feature Flow','All feature runners are in simulations/feature_flows.py. This pass tuned the feature contribution to reach the 94% total target.',[
+  E('div',{class:'flow'},P.feature.flow.map(function(s,i){return E('div',{class:'step'},[E('b',{text:'step '+(i+1)}),E('span',{text:s})]);}))
+]));
+
+main.appendChild(sec('feature-start','Feature Starting State','Scatter conversion, common start, and landing tables for the new feature flows.',[
+  E('div',{class:'grid3'},[
+    E('div',{class:'dcard'},[E('div',{class:'dk',text:'scatter conversion'}),E('div',{class:'dmeta',text:'Generic SC converts to one feature symbol.'}),barRows(P.feature.scatterConversion.map(function(c){return {label:c.symbol,value:c.probability};}),'label','value')]),
+    E('div',{class:'dcard'},[E('div',{class:'dk',text:'common start'}),E('div',{class:'dmeta',text:'Trigger symbol enters active area and 3 extra coins are added.'}),barRows(P.feature.startingCoinCounts.map(function(c){return {label:String(c.count)+' coins',value:c.probability};}),'label','value')]),
+    E('div',{class:'dcard'},[E('div',{class:'dk',text:'feature grids'}),E('div',{class:'dmeta',text:'Expansion uses 6x5 with top 3 rows locked. Multiplier uses 3x5.'})])
+  ])
+]));
+
+main.appendChild(sec('feature-coins','Feature Coin Tables','Credit values and landing-symbol tables used by Expansion and Multiplier.',[
+  E('div',{class:'grid2'},[
+    tbl([{t:'credit'},{t:'probability'}],P.feature.coinValues.map(function(c){return E('tr',null,[td(c.value,'num'),td(pct(c.probability,2),'num')]);}),'coin_values'),
+    tbl([{t:'landed type',l:true},{t:'probability'}],P.feature.coinTypes.map(function(c){return E('tr',null,[th(c.symbol),td(pct(c.probability,2),'num')]);}),'coin_types')
+  ])
+]));
+
+main.appendChild(sec('bags','Feature Symbols','Current feature trigger map. Expansion and Multiplier are implemented; the rest are routed for later passes.',[
+  tbl([{t:'order'},{t:'symbol',l:true},{t:'feature',l:true},{t:'status',l:true},{t:'effect',l:true}],P.feature.bags.map(function(b){return E('tr',null,[td(b.order,'num'),th('<span class="sid">'+b.symbol+'</span>'+b.symbol),td(b.name,'l'),td(b.action,'l'),td(b.effect,'l wrap')]);}))
+]));
+
+main.appendChild(sec('bag-tables','Feature Math Tables','Weighted tables introduced for the requested feature flows.',[
+  tbl([{t:'table',l:true},{t:'values',l:true},{t:'probabilities',l:true}],P.feature.bagTables.map(function(r){return E('tr',null,[th(r.table),td(r.values,'l'),td(r.probabilities,'l')]);}))
+]));
+
+main.appendChild(sec('notes','Implementation Notes','What is implemented today versus what is only present in the design document or symbol map.',[
+  tbl([{t:'status',l:true},{t:'item',l:true}],P.implementationNotes.map(function(n){var cls=(n.status==='Implemented'||n.status==='Measured')?'ok':((n.status.indexOf('Not')===0||n.status==='Warning')?'warn':'bad');return E('tr',null,[E('th',{class:'l',scope:'row',html:'<span class="pill '+cls+'">'+n.status+'</span>'}),td(n.item,'l wrap')]);}))
+]));
+
+main.appendChild(sec('machine-flow','Machine Flow','Compact code-level flow for the current implementation.',[
+  E('pre',{class:'mermaid',text:[
+    'base_game.run_one_spin',
+    '  -> select_reelset_index',
+    '  -> make_board',
+    '  -> overlay carried walking Collectors',
+    '  -> line_win_eval',
+    '  -> drop_coin_credits',
+    '  -> collect_win = visible_coin_total * active_collectors',
+    '  -> has_free_game_trigger',
+    '  -> convert_base_scatters for SC1-SC7 feature routing',
+    '  -> move_collectors_to_next_spin',
+    '',
+    'feature_flows.run_expansion_feature',
+    '  -> common trigger + 3 coin start',
+    '  -> 6x5 board with top 3 locked rows',
+    '  -> land empty/coin/GO/jackpot by locked or unlocked table',
+    '  -> GO unlocks next locked row and jackpot tokens count to awards',
+    '',
+    'feature_flows.run_multiplier_feature',
+    '  -> common trigger + 3 coin start',
+    '  -> 3x5 board',
+    '  -> optionally place 4-6 multiplier cells',
+    '  -> land empty/coin/jackpot and multiply coins only',
+    '',
+    'feature_flows.run_grow_feature',
+    '  -> max 3 persistent grower symbols',
+    '  -> each grower independently grows 3-5 other normal coins',
+    '',
+    'feature_flows.run_boost_feature',
+    '  -> weighted boost-spin check',
+    '  -> boost all other normal coins, then convert booster to a normal coin',
+    '',
+    'feature_flows.run_collect_feature',
+    '  -> max 3 collector symbols',
+    '  -> collectors independently collect other normal coins and convert',
+    '',
+    'feature_flows.run_splitter_feature',
+    '  -> splitter cells hold 2 or 3 coin values',
+    '  -> force splitter when fewer than 4 cells remain and fewer than 3 splitters landed',
+    '',
+    'feature_flows.run_mega_combo_feature',
+    '  -> require SC1-SC6 on converted base window',
+    '  -> map triggering symbols to exact bottom-row active positions',
+    '  -> run guaranteed SC1-SC6 opening actions',
+    '  -> continue combined 6x5 feature loop with locked rows, multipliers, boosts, growers, collectors, splitters, GO, and jackpot tokens'
+  ].join('\\n')})
+]));
+
+main.appendChild(E('footer',{html:'<b>Update convention:</b> this file is the Gryphon output dashboard requested for the project. When the dashboard command is given again, regenerate or update <code>bundle/output/dashboard_gryphon.html</code> with current code, tables, simulation metrics, and any new implementation notes.'}));
+
+var rail=E('nav',{class:'rail'},[E('h4',{text:'Gryphon'})]);
+[
+  ['sources','Sources'],['targets','Targets'],['flow','Base flow'],['symbols','Symbols'],['paytable','Paytable'],['base-coins','Base coins'],
+  ['feature-flow','Feature flow'],['feature-start','Feature start'],['feature-coins','Feature coins'],['bags','Bags'],
+  ['bag-tables','Bag tables'],['notes','Notes'],['machine-flow','Machine flow']
+].forEach(function(a){rail.appendChild(E('a',{href:'#'+a[0],text:a[1]}));});
+document.getElementById('app').replaceChildren(E('div',{class:'shell'},[rail,main]));
+})();
+</script>
+</body>
+</html>

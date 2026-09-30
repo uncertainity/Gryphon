@@ -8,15 +8,18 @@ from Numba_Engine import (
 )
 
 
-def test_base_coin_credit_table_is_normalized_and_low_value_weighted():
+def test_base_coin_credit_table_is_normalized_and_targets_average_value():
     rules = BASE_GAME_CONFIG
 
     assert len(rules.coin_credit_values) == len(
         rules.coin_credit_value_probabilities
     )
     assert np.all(np.diff(rules.coin_credit_values) > 0)
-    assert np.all(np.diff(rules.coin_credit_value_probabilities) < 0)
     assert np.isclose(rules.coin_credit_value_probabilities.sum(), 1.0)
+    assert 1.15 <= np.dot(
+        rules.coin_credit_values,
+        rules.coin_credit_value_probabilities,
+    ) <= 1.25
 
 
 def test_base_reel_collection_loads_both_reelsets_with_configured_weights():
@@ -26,25 +29,23 @@ def test_base_reel_collection_loads_both_reelsets_with_configured_weights():
     )
 
     assert reels.reelsets.shape[0] == 2
-    np.testing.assert_allclose(reels.weights, np.array([0.023, 0.977]))
-    assert not np.any(
-        np.isin(
-            reels.reelsets[1],
-            BASE_GAME_CONFIG.free_game_symbols,
-        )
+    np.testing.assert_allclose(
+        reels.weights,
+        np.array([0.50, 0.50]),
     )
-
-    for symbol in (
-        BASE_GAME_CONFIG.coin_symbol,
-        BASE_GAME_CONFIG.collect_symbol,
+    assert np.any(reels.reelsets == BASE_GAME_CONFIG.sc_symbol)
+    for scatter_symbol in (
+        REEL_DICT["SC1"],
+        REEL_DICT["SC2"],
+        REEL_DICT["SC3"],
+        REEL_DICT["SC4"],
+        REEL_DICT["SC5"],
+        REEL_DICT["SC6"],
+        REEL_DICT["SC7"],
     ):
-        original_density = np.count_nonzero(reels.reelsets[0] == symbol) / (
-            reels.lengths[0].sum()
-        )
-        new_density = np.count_nonzero(reels.reelsets[1] == symbol) / (
-            reels.lengths[1].sum()
-        )
-        assert new_density < original_density
+        assert not np.any(reels.reelsets == scatter_symbol)
+
+    assert not np.any(reels.reelsets == BASE_GAME_CONFIG.coin_symbol)
 
     reelset_trigger_probabilities = np.zeros(2)
     for reelset_index in range(2):
@@ -68,7 +69,7 @@ def test_base_reel_collection_loads_both_reelsets_with_configured_weights():
         reels.weights,
         reelset_trigger_probabilities,
     )
-    assert 0.019 <= combined_trigger_probability <= 0.021
+    assert 0.045 <= combined_trigger_probability <= 0.055
 
 
 def test_any_single_sc_symbol_can_trigger_free_game():

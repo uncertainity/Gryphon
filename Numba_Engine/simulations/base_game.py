@@ -4,18 +4,10 @@ from pathlib import Path
 from numba import njit, prange
 from numba.typed import List
 
-from ..core.config import (
-    BASE_GAME_CONFIG,
-    BASE_JACKPOT_OVERLAY_CONFIG,
-    BASE_PAY_TABLE,
-    JACKPOT_CONFIG,
-    PAY_LINES,
-)
+from ..core.config import BASE_GAME_CONFIG, BASE_PAY_TABLE, PAY_LINES
 from ..core.kernels import (
-    apply_jackpot_overlay,
     has_free_game_trigger,
     line_win_eval,
-    make_base_jackpot_overlay,
     make_board,
     probChoice,
     select_reelset_index,
@@ -49,7 +41,7 @@ def move_collectors_to_next_spin(
 @njit
 def assign_coin_credits(pay_window, rules):
     """Create a credit-value window without replacing Coin symbol IDs."""
-    coin_value_window = np.zeros(pay_window.shape, dtype=np.int16)
+    coin_value_window = np.zeros(pay_window.shape, dtype=np.float64)
 
     for row in range(pay_window.shape[0]):
         for col in range(pay_window.shape[1]):
@@ -63,110 +55,133 @@ def assign_coin_credits(pay_window, rules):
 
 
 @njit
-def run_one_paid_spin(
-    initial_reels,
-    rules,
-    overlay_rules,
-    jackpot_rules,
-    storage,
-    jackpot_values,
-    collector_positions,
-    collector_count,
-):
-    """Resolve one paid spin and return its continuation state."""
-    reelset_index = select_reelset_index(initial_reels.weights)
-    pay_window = make_board(
-        initial_reels.lengths[reelset_index],
-        initial_reels.reelsets[reelset_index],
-        rules,
-    )
-    natural_collector_positions = np.where(
-        pay_window.ravel() == rules.collect_symbol
-    )[0]
-
-    for idx in range(collector_count):
-        position = collector_positions[idx]
-        row = position // rules.num_reels
-        col = position % rules.num_reels
-        pay_window[row, col] = rules.collect_symbol
-
-    for position in natural_collector_positions:
-        position_is_occupied = False
-        for idx in range(collector_count):
-            if collector_positions[idx] == position:
-                position_is_occupied = True
-                break
-        if position_is_occupied:
-            continue
-        if collector_count == len(collector_positions):
-            break
-        collector_positions[collector_count] = position
-        collector_count += 1
-
-    (
-        line_win,
-        line_winning_symbols,
-        line_match_counts,
-        line_win_amounts,
-        winning_window,
-        hit_counts,
-        symbol_win_amounts,
-    ) = line_win_eval(
-        pay_window,
-        BASE_PAY_TABLE,
-        PAY_LINES,
-        rules.wild_symbol,
-    )
-
+def drop_coin_credits(pay_window, collector_count, rules):
+    """Drop overlay credit coins before Collect resolves."""
     coin_value_window = assign_coin_credits(pay_window, rules)
-    jackpot_overlay_window = make_base_jackpot_overlay(
-        pay_window,
-        overlay_rules,
-        jackpot_rules.jackpot_types,
-    )
-    jackpot_values_before, jackpot_increment_counts = apply_jackpot_overlay(
-        jackpot_overlay_window,
-        jackpot_rules,
-        jackpot_values,
-    )
-    visible_coin_total = int(np.sum(coin_value_window))
-    collect_win = visible_coin_total * collector_count
-    free_game_trigger = has_free_game_trigger(pay_window, rules)
+    max_positions = pay_window.size
+    available_positions = np.empty(max_positions, dtype=np.int32)
+    num_available = 0
 
-    storage.save_spin(
-        pay_window,
-        coin_value_window,
-        jackpot_overlay_window,
-        jackpot_values_before,
-        jackpot_values,
-        jackpot_increment_counts,
-        line_win,
-        collect_win,
-        symbol_win_amounts,
-        hit_counts,
-        line_winning_symbols,
-        line_match_counts,
-        line_win_amounts,
-        free_game_trigger,
-        collector_count,
-    )
+    for row in range(pay_window.shape[0]):
+        for col in range(pay_window.shape[1]):
+            symbol = pay_window[row, col]
+            position = row * pay_window.shape[1] + col
+            if (
+                symbol == rules.wild_symbol
+                or symbol == rules.collect_symbol
+                or symbol == rules.coin_symbol
+                or symbol == rules.sc_symbol
+                or coin_value_window[row, col] > 0.0
+            ):
+                continue
+            available_positions[num_available] = position
+            num_available += 1
 
-    collector_count = move_collectors_to_next_spin(
-        collector_positions,
-        collector_count,
-        rules.num_reels,
+    if num_available == 0:
+        return coin_value_window
+
+    probability_index = 2
+    if collector_count == 0:
+        probability_index = 0
+    elif collector_count == 1:
+        probability_index = 1
+
+    if (
+        np.random.uniform(0.0, 1.0)
+        >= rules.coin_drop_probabilities[probability_index]
+    ):
+        return coin_value_window
+
+    drop_count = int(
+        probChoice(
+            rules.coin_drop_count_probabilities,
+            rules.coin_drop_counts,
+        )
     )
-    return (
-        line_win + collect_win,
-        free_game_trigger,
-        collector_count,
-        pay_window,
-    )
+    drop_count = min(drop_count, num_available)
+
+    for _ in range(drop_count):
+        available_index = np.random.randint(0, num_available)
+        position = available_positions[available_index]
+        row = position // pay_window.shape[1]
+        col = position % pay_window.shape[1]
+        coin_value_window[row, col] = probChoice(
+            rules.coin_credit_value_probabilities,
+            rules.coin_credit_values,
+        )
+
+        num_available -= 1
+        available_positions[available_index] = available_positions[
+            num_available
+        ]
+
+        if num_available == 0:
+            break
+
+    return coin_value_window
 
 
 @njit
-def run_one_spin(initial_reels, rules, storage, jackpot_values):
-    """Run connected paid spins until all walking Collectors have exited."""
+def convert_base_scatters(pay_window, rules):
+    """Replace generic SC symbols with weighted feature symbols."""
+    converted_window = pay_window.copy()
+    feature_flags = np.zeros(
+        len(rules.scatter_feature_symbols),
+        dtype=np.bool_,
+    )
+
+    for row in range(converted_window.shape[0]):
+        for col in range(converted_window.shape[1]):
+            if converted_window[row, col] != rules.sc_symbol:
+                continue
+            feature_symbol = int(
+                probChoice(
+                    rules.scatter_feature_symbol_probabilities,
+                    rules.scatter_feature_symbols,
+                )
+            )
+            converted_window[row, col] = feature_symbol
+            for idx in range(len(rules.scatter_feature_symbols)):
+                if rules.scatter_feature_symbols[idx] == feature_symbol:
+                    feature_flags[idx] = True
+                    break
+
+    combo_triggered = False
+    has_all_combo_symbols = True
+    for combo_idx in range(len(rules.combo_feature_symbols)):
+        found_symbol = False
+        for row in range(converted_window.shape[0]):
+            for col in range(converted_window.shape[1]):
+                if converted_window[row, col] == rules.combo_feature_symbols[combo_idx]:
+                    found_symbol = True
+                    break
+            if found_symbol:
+                break
+        if not found_symbol:
+            has_all_combo_symbols = False
+            break
+
+    if has_all_combo_symbols:
+        combo_triggered = (
+            np.random.uniform(0.0, 1.0)
+            < rules.combo_feature_probability
+        )
+        if combo_triggered:
+            for idx in range(len(rules.scatter_feature_symbols)):
+                if rules.scatter_feature_symbols[idx] == rules.scatter_feature_symbols[-1]:
+                    feature_flags[idx] = True
+                    break
+
+    return converted_window, feature_flags, combo_triggered
+
+
+@njit
+def run_one_spin(initial_reels, rules, storage):
+    """Run connected paid spins until all walking Collectors have exited.
+
+    Each loop iteration is a separate paid spin. The returned spin count must
+    therefore be included in the bet denominator when RTP is calculated.
+    """
     collector_positions = np.empty(
         rules.max_active_collectors,
         dtype=np.int32,
@@ -178,21 +193,90 @@ def run_one_spin(initial_reels, rules, storage, jackpot_values):
     storage.begin_round()
 
     while True:
-        spin_win, free_game_trigger, collector_count, pay_window = (
-            run_one_paid_spin(
-                initial_reels,
-                rules,
-                BASE_JACKPOT_OVERLAY_CONFIG,
-                JACKPOT_CONFIG,
-                storage,
-                jackpot_values,
-                collector_positions,
-                collector_count,
-            )
+        reelset_index = select_reelset_index(initial_reels.weights)
+        pay_window = make_board(
+            initial_reels.lengths[reelset_index],
+            initial_reels.reelsets[reelset_index],
+            rules,
         )
-        total_win += spin_win
+        natural_collector_positions = np.where(
+            pay_window.ravel() == rules.collect_symbol
+        )[0]
+
+        # Positions retained from the previous iteration have already moved.
+        for idx in range(collector_count):
+            position = collector_positions[idx]
+            row = position // rules.num_reels
+            col = position % rules.num_reels
+            pay_window[row, col] = rules.collect_symbol
+
+        # Append Collectors that landed naturally, unless a walking Collector
+        # has already occupied that cell on this paid spin.
+        for position in natural_collector_positions:
+            position_is_occupied = False
+            for idx in range(collector_count):
+                if collector_positions[idx] == position:
+                    position_is_occupied = True
+                    break
+            if position_is_occupied:
+                continue
+            if collector_count == len(collector_positions):
+                break
+            collector_positions[collector_count] = position
+            collector_count += 1
+
+        (
+            line_win,
+            line_winning_symbols,
+            line_match_counts,
+            line_win_amounts,
+            winning_window,
+            hit_counts,
+            symbol_win_amounts,
+        ) = line_win_eval(
+            pay_window,
+            BASE_PAY_TABLE,
+            PAY_LINES,
+            rules.wild_symbol,
+        )
+
+        coin_value_window = drop_coin_credits(
+            pay_window,
+            collector_count,
+            rules,
+        )
+        visible_coin_total = np.sum(coin_value_window)
+        collect_win = visible_coin_total * collector_count
+        free_game_trigger = has_free_game_trigger(pay_window, rules)
+        display_window = pay_window
+        if free_game_trigger:
+            display_window, feature_flags, combo_triggered = (
+                convert_base_scatters(pay_window, rules)
+            )
+
+        storage.save_spin(
+            display_window,
+            coin_value_window,
+            line_win,
+            collect_win,
+            symbol_win_amounts,
+            hit_counts,
+            line_winning_symbols,
+            line_match_counts,
+            line_win_amounts,
+            free_game_trigger,
+            collector_count,
+        )
+
+        total_win += line_win + collect_win
         free_game_triggers += int(free_game_trigger)
         num_paid_spins += 1
+
+        collector_count = move_collectors_to_next_spin(
+            collector_positions,
+            collector_count,
+            rules.num_reels,
+        )
         if collector_count == 0:
             break
 
@@ -206,14 +290,12 @@ def run_spins(initial_reels, rules, num_rounds, storage):
     total_win = 0.0
     free_game_triggers = 0
     total_paid_spins = 0
-    jackpot_values = JACKPOT_CONFIG.seed_values.copy()
 
     for _ in range(num_rounds):
         round_win, round_triggers, round_spins = run_one_spin(
             initial_reels,
             rules,
             storage,
-            jackpot_values,
         )
         total_win += round_win
         free_game_triggers += round_triggers
@@ -297,7 +379,6 @@ def run_sims(
                     BASE_GAME_CONFIG.num_reels,
                     BASE_GAME_CONFIG.num_paying_symbols,
                     len(PAY_LINES),
-                    len(JACKPOT_CONFIG.jackpot_types),
                 )
             )
 
@@ -332,7 +413,6 @@ def run_sims(
             BASE_GAME_CONFIG.num_reels,
             BASE_GAME_CONFIG.num_paying_symbols,
             len(PAY_LINES),
-            len(JACKPOT_CONFIG.jackpot_types),
         )
         total_win, free_game_triggers, total_paid_spins = run_spins(
             initial_reels,
