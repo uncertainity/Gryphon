@@ -3,8 +3,10 @@
 ## Scope
 
 This document describes the game flow executed by the integrated Numba engine.
-It describes runtime mechanics, not the current RTP tuning, target allocation,
-or search strategy.
+Sections 1-10 describe runtime mechanics. Sections 11-12 record the current
+configured route frequencies and the supported full-game run/reporting path.
+The calibration rationale and measured RTP results live in
+[`Tuning/TUNING_SUMMARY.md`](Tuning/TUNING_SUMMARY.md).
 
 The integrated path is:
 
@@ -23,12 +25,13 @@ they are not dispatched by `full_game.py`.
 
 ```text
 begin paid round
-    -> resolve one 3x5 base spin
+    -> select a base reelset and resolve one 3x5 base spin
     -> evaluate paylines
     -> resolve base Coin/Collector behavior
     -> apply base jackpot overlays
     -> if generic SC is present, convert every SC to SC1-SC6
     -> identify the distinct visible Bag types
+    -> advance walking base Collectors for the next paid spin
     -> select exactly one eligible route
          -> Plain, or one visible SC1-SC6 single-Bag route
          -> Mega Combo when all six distinct Bags are visible
@@ -40,7 +43,6 @@ begin paid round
          -> Expansion unlocks rows on the same board
          -> resolve Bags in the configured order
     -> pay non-jackpot feature win and any progressive jackpots
-    -> move walking base Collectors
     -> repeat a paid spin while a Collector remains
     -> finish the round
 ```
@@ -55,12 +57,17 @@ The base award is resolved in this order:
 
 1. Evaluate the 20 configured paylines from left to right.
 2. Build the separate Coin-credit overlay.
-3. Multiply the visible Coin-credit total by the active Collector count.
-4. Apply jackpot overlays and increment the persistent progressive values.
+3. Build and apply the base jackpot overlay, incrementing the persistent
+   progressive values.
+4. Multiply the visible Coin-credit total by the active Collector count.
 5. Test the base window for a generic `SC` trigger.
+6. Move every walking Collector one reel to the right for the next paid spin,
+   removing Collectors that leave reel 5.
 
 Line symbols and the Coin-credit overlay are kept as separate data. Jackpot
 overlays increment progressives; they do not award a jackpot in the base game.
+The Collector movement occurs before a triggered Hold-and-Spin is executed,
+but the Hold-and-Spin does not read or modify that base Collector state.
 
 ## 2. Convert the base trigger
 
@@ -88,6 +95,13 @@ combined. Mega Combo is eligible only when all six distinct symbols `SC1`
 through `SC6` are present; the current base configuration then launches it
 deterministically.
 
+Mega remains part of normal symbol-driven base play. `ReelSet_3.csv` is a rare
+Mega-capable base reelset containing enough generic `SC` symbols to make all
+six converted Bag types reachable. It is selected by the same reelset loader,
+produces the same 3x5 base window, and passes through the same conversion and
+all-six detection as the other reelsets. There is no direct, post-spin, or
+tuning-only Mega launch.
+
 ## 3. One routed Hold-and-Spin session
 
 The selected route is passed to one call to `hold_and_free_spin`. There is no
@@ -106,6 +120,13 @@ Every session owns exactly one of each of the following:
 The eight reporting routes are Splitter, Grow, Boost, Multiplier, Collect,
 Expansion, Mega Combo, and Plain. One and only one route is recorded for each
 triggered session.
+
+For a partial Bag set, the eligible pool is Plain plus one route for each
+distinct visible Bag. The configured relative weights choose from that pool.
+For example, converted `SC1, SC2, SC1` makes Plain, Splitter, and Grow eligible;
+it does not launch two boards and the duplicate `SC1` does not add another
+Splitter entry. When all six distinct Bags are visible, Mega bypasses this
+partial-set choice and is selected as the single route.
 
 ## 4. Logical board size and fixed-shape storage
 
@@ -236,7 +257,7 @@ The default actions are:
 | Grower | remain |
 | Booster | disappear |
 | Multiplier | disappear |
-| Collector | convert to Coin |
+| Collector | disappear |
 | Expansion | convert to Coin |
 
 Reset behavior is also config data aligned with the landing-symbol types. By
@@ -290,3 +311,60 @@ The shared Hold-and-Spin config exposes, among other controls:
 
 Tuning code may construct or replace these arrays later, but the Numba runtime
 remains the sole implementation of the game flow.
+
+## 11. Current configured route frequencies
+
+The current base reelset weights, equal `SC1`-`SC6` conversion probabilities,
+and partial-route weights jointly allocate Hold-and-Spin sessions as follows.
+These are paid-spin probabilities; a paid round can contain more than one paid
+spin while a walking Collector remains on the base window.
+
+| Selected route | Paid-spin probability | Average paid spins per trigger |
+|---|---:|---:|
+| Plain | 0.1248% | 1 in 801.28 |
+| Splitter (`SC1`) | 0.1392% | 1 in 718.39 |
+| Grow (`SC2`) | 0.1392% | 1 in 718.39 |
+| Boost (`SC3`) | 0.1392% | 1 in 718.39 |
+| Multiplier (`SC4`) | 0.1392% | 1 in 718.39 |
+| Collect (`SC5`) | 0.1392% | 1 in 718.39 |
+| Expansion (`SC6`) | 0.1392% | 1 in 718.39 |
+| Mega Combo (`SC1`-`SC6`) | 0.0400% | 1 in 2,500 |
+| **Any Hold-and-Spin** | **1.0000%** | **1 in 100** |
+
+The six single-Bag rows total 0.8352%. These values are the configured
+long-run allocations, not hard launch gates: an individual simulation will
+fluctuate around them. The exact controls and retained validation measurements
+are documented in `Tuning/TUNING_SUMMARY.md`.
+
+## 12. Full-game execution, storage, and statistics
+
+`Numba_Engine.simulations.full_game` is the supported integrated entry point.
+From the repository root, a foreground 10-million-round run is:
+
+```bash
+.venv/bin/python -m Numba_Engine.simulations.full_game \
+  -n 10m -w 4 -p -c \
+  -o full_game_10m.npz --overwrite
+```
+
+To leave the same run in the background and retain its console report:
+
+```bash
+nohup .venv/bin/python -m Numba_Engine.simulations.full_game \
+  -n 10m -w 4 -p -c \
+  -o full_game_10m.npz --overwrite \
+  > Numba_Engine/output/logs/full_game_10m.log 2>&1 < /dev/null &
+```
+
+The `-n` value counts paid rounds, not necessarily paid spins. `-p` enables
+worker-sharded parallel execution and `-c` uses compact base-game storage.
+The output filename must be a basename and is written under
+`Numba_Engine/output/npz_library/`; shell redirection controls the separate log
+path.
+
+The final report includes round and paid-spin counts, total/base/feature/
+jackpot RTP, the overall Hold-and-Spin trigger rate, trigger count and rate for
+each of the eight routes, average feature win and respins by route, and jackpot
+award counts/rates by tier. Before saving, the runner verifies that detailed
+Hold-and-Spin session counts, full-game trigger counts, paid-spin counts, and
+stored total wins agree.
