@@ -200,6 +200,41 @@ def multiplier_bag(
 
 
 @njit
+def place_multiplier_cells(
+    pay_window,
+    multiplier_cells,
+    locked_row_idx,
+    count_probabilities,
+    counts,
+    multiplier_probabilities,
+    multiplier_values,
+):
+    """Place persistent multipliers on random empty active cells."""
+    num_rows, num_reels = pay_window.shape
+    available_positions = np.empty(num_rows * num_reels, dtype=np.int32)
+    num_available = 0
+    for row in range(locked_row_idx + 1, num_rows):
+        for col in range(num_reels):
+            if pay_window[row, col] == 0 and multiplier_cells[row, col] <= 1:
+                available_positions[num_available] = row * num_reels + col
+                num_available += 1
+
+    requested_count = int(probChoice(count_probabilities, counts))
+    placement_count = min(requested_count, num_available)
+    for placement_index in range(placement_count):
+        swap_index = np.random.randint(placement_index, num_available)
+        position = available_positions[swap_index]
+        available_positions[swap_index] = available_positions[placement_index]
+        available_positions[placement_index] = position
+        row = position // num_reels
+        col = position % num_reels
+        multiplier_cells[row, col] = int(
+            probChoice(multiplier_probabilities, multiplier_values)
+        )
+    return placement_count
+
+
+@njit
 def collector_bag(
     pay_window,
     coin_positions,
@@ -297,7 +332,7 @@ def collect_free_game_jackpot_tokens(
         # mass prevents a common Mini from being redistributed into the rare
         # Major and Grand types after the Mini has already awarded.
         if awarded_jackpots[jackpot_type]:
-            continue
+            break
 
         row = position // num_reels
         col = position % num_reels
@@ -378,6 +413,7 @@ class HoldAndSpinResult(NamedTuple):
     total_spins: int
     jackpot_meters: np.ndarray
     awarded_jackpots: np.ndarray
+    multiplier_cells: np.ndarray
 
 
 @njit
@@ -520,6 +556,10 @@ def hold_and_spin(
     locked_row_idx = num_rows - rules.starting_rows - 1
     pay_window = np.zeros((num_rows, num_reels), dtype=np.int16)
     coin_mask = np.zeros(max_positions, dtype=np.bool_)
+    multiplier_cells = np.ones(
+        (num_rows, num_reels),
+        dtype=np.int16,
+    )
     initial_num_coins = int(
         probChoice(
             rules.starting_coin_count_probabilities,
@@ -592,15 +632,25 @@ def hold_and_spin(
         for row in range(first_landing_row, num_rows):
             for col in range(num_reels):
                 if pay_window[row, col] == 0:
+                    locked_fallback_probability = rules.p_coin_locked
+                    active_fallback_probability = rules.p_coin_unlocked
+                    if rules.p_coin_locked_by_feature[feature_index] >= 0.0:
+                        locked_fallback_probability = (
+                            rules.p_coin_locked_by_feature[feature_index]
+                        )
+                    if rules.p_coin_unlocked_by_feature[feature_index] >= 0.0:
+                        active_fallback_probability = (
+                            rules.p_coin_unlocked_by_feature[feature_index]
+                        )
                     coin_probability = landing_probability_for_occupied_count(
-                        rules.p_coin_locked,
+                        locked_fallback_probability,
                         rules.p_coin_locked_by_occupied_count,
                         occupied_count,
                     )
                     if row > locked_row_idx:
                         coin_probability = (
                             landing_probability_for_occupied_count(
-                                rules.p_coin_unlocked,
+                                active_fallback_probability,
                                 rules.p_coin_unlocked_by_occupied_count,
                                 occupied_count,
                             )
@@ -608,11 +658,16 @@ def hold_and_spin(
 
                     if np.random.uniform(0.0, 1.0) < coin_probability:
                         coin_type_probabilities = rules.coin_type_probabilities
+                        if feature_index == len(rules.bag_symbols):
+                            coin_type_probabilities = (
+                                rules.mega_coin_type_probabilities
+                            )
                         state_type_probabilities = (
                             rules.coin_type_probabilities_by_occupied_count
                         )
                         if (
-                            occupied_count
+                            feature_index != len(rules.bag_symbols)
+                            and occupied_count
                             < state_type_probabilities.shape[0]
                             and state_type_probabilities[occupied_count, 0]
                             >= 0.0
@@ -644,6 +699,15 @@ def hold_and_spin(
                                 rules.coin_value_probabilities,
                                 rules.coin_values,
                             )
+                            if (
+                                row > locked_row_idx
+                                and multiplier_cells[row, col] > 1
+                            ):
+                                coin_val = min(
+                                    rules.max_coin_value,
+                                    coin_val * multiplier_cells[row, col],
+                                )
+                                multiplier_cells[row, col] = 1
                             pay_window[row, col] = coin_val
                             coin_mask[position] = True
                             landed_coin_positions[num_landed_coins] = position
@@ -694,10 +758,22 @@ def hold_and_spin(
             # Expansion is processed bottom-up so an unlock can activate an
             # Expansion symbol stored in the newly opened row.
             if bag_index == 5:
-                for feature_index in range(bag_counts[bag_index] - 1, -1, -1):
-                    position = bag_positions[bag_index, feature_index]
+                for bag_occurrence_index in range(
+                    bag_counts[bag_index] - 1,
+                    -1,
+                    -1,
+                ):
+                    position = bag_positions[
+                        bag_index,
+                        bag_occurrence_index,
+                    ]
                     row = position // num_reels
                     if row <= locked_row_idx:
+                        continue
+                    if (
+                        np.random.uniform(0.0, 1.0)
+                        >= rules.bag_activation_probabilities[bag_index]
+                    ):
                         continue
                     locked_row_idx = expansion_bag(
                         locked_row_idx,
@@ -729,9 +805,17 @@ def hold_and_spin(
                     locked_row_idx,
                     num_reels,
                 )
-                for feature_index in range(bag_counts[bag_index]):
-                    position = bag_positions[bag_index, feature_index]
+                for bag_occurrence_index in range(bag_counts[bag_index]):
+                    position = bag_positions[
+                        bag_index,
+                        bag_occurrence_index,
+                    ]
                     if position // num_reels <= locked_row_idx:
+                        continue
+                    if (
+                        np.random.uniform(0.0, 1.0)
+                        >= rules.bag_activation_probabilities[bag_index]
+                    ):
                         continue
                     splitter_bag(
                         pay_window,
@@ -767,9 +851,17 @@ def hold_and_spin(
                     locked_row_idx,
                     num_reels,
                 )
-                for feature_index in range(bag_counts[bag_index]):
-                    position = bag_positions[bag_index, feature_index]
+                for bag_occurrence_index in range(bag_counts[bag_index]):
+                    position = bag_positions[
+                        bag_index,
+                        bag_occurrence_index,
+                    ]
                     if position // num_reels <= locked_row_idx:
+                        continue
+                    if (
+                        np.random.uniform(0.0, 1.0)
+                        >= rules.bag_activation_probabilities[bag_index]
+                    ):
                         continue
                     booster_bag(
                         pay_window,
@@ -802,9 +894,17 @@ def hold_and_spin(
                     locked_row_idx,
                     num_reels,
                 )
-                for feature_index in range(bag_counts[bag_index]):
-                    position = bag_positions[bag_index, feature_index]
+                for bag_occurrence_index in range(bag_counts[bag_index]):
+                    position = bag_positions[
+                        bag_index,
+                        bag_occurrence_index,
+                    ]
                     if position // num_reels <= locked_row_idx:
+                        continue
+                    if (
+                        np.random.uniform(0.0, 1.0)
+                        >= rules.bag_activation_probabilities[bag_index]
+                    ):
                         continue
                     grower_bag(
                         pay_window,
@@ -827,21 +927,26 @@ def hold_and_spin(
                     )
 
             elif bag_index == 3:
-                active_coin_positions = collect_active_coin_positions(
-                    coin_mask,
-                    locked_row_idx,
-                    num_reels,
-                )
-                for feature_index in range(bag_counts[bag_index]):
-                    position = bag_positions[bag_index, feature_index]
+                for bag_occurrence_index in range(bag_counts[bag_index]):
+                    position = bag_positions[
+                        bag_index,
+                        bag_occurrence_index,
+                    ]
                     if position // num_reels <= locked_row_idx:
                         continue
-                    multiplier_bag(
+                    if (
+                        np.random.uniform(0.0, 1.0)
+                        >= rules.bag_activation_probabilities[bag_index]
+                    ):
+                        continue
+                    place_multiplier_cells(
                         pay_window,
-                        active_coin_positions,
+                        multiplier_cells,
+                        locked_row_idx,
+                        rules.multiplier_cell_count_probabilities,
+                        rules.multiplier_cell_counts,
                         rules.multiplier_probabilities,
                         rules.multiplier_values,
-                        rules.max_coin_value,
                     )
                     apply_bag_symbol_action(
                         pay_window,
@@ -867,9 +972,17 @@ def hold_and_spin(
                     locked_row_idx,
                     num_reels,
                 )
-                for feature_index in range(bag_counts[bag_index]):
-                    position = bag_positions[bag_index, feature_index]
+                for bag_occurrence_index in range(bag_counts[bag_index]):
+                    position = bag_positions[
+                        bag_index,
+                        bag_occurrence_index,
+                    ]
                     if position // num_reels <= locked_row_idx:
+                        continue
+                    if (
+                        np.random.uniform(0.0, 1.0)
+                        >= rules.bag_activation_probabilities[bag_index]
+                    ):
                         continue
                     if collector_events_used < rules.max_collector_events:
                         collector_meter = collector_bag(
@@ -938,6 +1051,7 @@ def hold_and_spin(
         total_spins,
         jackpot_meters,
         awarded_jackpots,
+        multiplier_cells,
     )
 
 

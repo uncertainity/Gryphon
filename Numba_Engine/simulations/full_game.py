@@ -119,6 +119,8 @@ def validate_full_game_config(config):
         np.isfinite(payout_multipliers)
     ):
         raise ValueError("Shared H&S payout multipliers must be finite and nonnegative")
+    if not np.isfinite(config.max_win) or config.max_win <= 0.0:
+        raise ValueError("Full-game max_win must be finite and positive")
     route_probability_total = (
         config.feature_rtp.plain_feature_probability
         + len(config.hold_and_spin.bag_symbols)
@@ -178,6 +180,21 @@ def run_one_full_round(
             collector_count,
         )
 
+        # The hard cap applies to the complete wager round, including any
+        # collector-driven continuation spins and all launched features.
+        remaining_cap = max(
+            0.0,
+            config.max_win
+            - round_base_win
+            - round_feature_win
+            - round_jackpot_win,
+        )
+        line_win = min(line_win, remaining_cap)
+        remaining_cap -= line_win
+        collect_win = min(collect_win, remaining_cap)
+        remaining_cap -= collect_win
+        base_win = line_win + collect_win
+
         values_before_feature = jackpot_values.copy()
         feature_trigger_counts = np.zeros(len(FEATURE_NAMES), dtype=np.int64)
         feature_wins_by_type = np.zeros(len(FEATURE_NAMES), dtype=np.float64)
@@ -210,6 +227,8 @@ def run_one_full_round(
                     feature_index
                 ]
             )
+            feature_win = min(feature_win, remaining_cap)
+            remaining_cap -= feature_win
             feature_trigger_counts[feature_index] += 1
             feature_wins_by_type[feature_index] += feature_win
             feature_spins_by_type[feature_index] += (
@@ -222,9 +241,13 @@ def run_one_full_round(
         jackpot_win = 0.0
         for jackpot_type, award_count in enumerate(jackpot_awards):
             for _ in range(int(award_count)):
-                award_amount = jackpot_values[jackpot_type]
+                award_amount = min(
+                    jackpot_values[jackpot_type],
+                    remaining_cap,
+                )
                 jackpot_award_amounts[jackpot_type] += award_amount
                 jackpot_win += award_amount
+                remaining_cap -= award_amount
                 jackpot_values[jackpot_type] = (
                     jackpot_rules.seed_values[jackpot_type]
                 )

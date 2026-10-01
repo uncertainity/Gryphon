@@ -68,7 +68,7 @@ def make_base_jackpot_overlay(pay_window, overlay_rules, jackpot_types):
 
 @njit
 def apply_jackpot_overlay(overlay_window, jackpot_rules, jackpot_values):
-    """Apply overlays to mutable values using the configured seed cap."""
+    """Apply overlays to mutable values using each tier's configured cap."""
     values_before = jackpot_values.copy()
     increment_counts = np.zeros(
         len(jackpot_rules.jackpot_types),
@@ -81,15 +81,14 @@ def apply_jackpot_overlay(overlay_window, jackpot_rules, jackpot_values):
 
         type_index = int(jackpot_type)
         increment_counts[type_index] += 1
-        maximum_value = (
-            jackpot_rules.seed_values[type_index]
-            * jackpot_rules.cap_multiplier
-        )
         increased_value = (
             jackpot_values[type_index]
             + jackpot_rules.increment_values[type_index]
         )
-        jackpot_values[type_index] = min(increased_value, maximum_value)
+        jackpot_values[type_index] = min(
+            increased_value,
+            jackpot_rules.cap_values[type_index],
+        )
 
     return values_before, increment_counts
 

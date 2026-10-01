@@ -46,6 +46,7 @@ from .hold_and_spin_kernels import (
     grower_bag,
     hold_and_spin,
     multiplier_bag,
+    place_multiplier_cells,
     splitter_bag,
 )
 from .reels import (
@@ -117,6 +118,7 @@ __all__ = [
     "csv_to_numba",
     "make_board",
     "multiplier_bag",
+    "place_multiplier_cells",
     "make_reel_collection",
     "make_reel_collections",
     "merge_npz",

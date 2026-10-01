@@ -1,88 +1,122 @@
-# Gryphon RTP targets
+# Gryphon RTP and trigger targets
 
-This is the tuning target, not the currently achieved simulation result. RTP values use a paid-spin bet denominator.
+Updated: 2026-10-02
 
-## Game-level targets
+`rtp_targets_new.csv` is the supplied source. `rtp_targets.csv` is the
+reconciled, machine-readable calibration target consumed by the evaluator.
+All RTP values use paid spins as the denominator.
+
+## Reconciled game-level target
 
 | Metric | Target |
 |---|---:|
-| Total RTP | 94.0201% |
-| Base RTP | 55.1746% |
-| Base-game hit rate | 23.7585% |
-| Hold-and-Spin trigger rate | 1.0000% (1 in 100 paid spins) |
-| Non-jackpot feature RTP | 37.5414% |
-| Progressive-jackpot RTP | 1.3041% |
+| Total expected RTP | 94.0201% |
+| Base RTP | 55.0000% |
+| Base hit rate | 25%-30% |
+| Natural Base Collect | 1 in 20-25 paid spins |
+| Coins collected per Collector | 3.5-5.0 |
+| Any Hold-and-Spin | 1 in 75 paid spins |
+| Plain Hold-and-Spin | 0 |
+| Mega Combo | 1 in 1,500 paid spins |
+| Hard win cap | 15,000x per wager round |
 
-Base-game hit rate means the percentage of paid spins with a positive base-game award. Hold-and-Spin trigger rate is the chance that a paid spin launches the feature; it is not an internal feature-lane probability.
+The resulting RTP budget is:
 
-## RTP allocation
-
-| Component | Target RTP |
+| Component | Expected RTP |
 |---|---:|
-| Base paylines | 35.1196% |
-| Base Collect | 20.0551% |
-| Plain Hold-and-Spin | 4.4389% |
-| Splitter | 4.1215% |
-| Grow | 4.8395% |
-| Boost | 3.4524% |
-| Multiplier | 3.9567% |
-| Feature Collect | 6.1750% |
-| Expansion | 7.1616% |
-| Mega Combo | 3.3957% |
-| Mini jackpot | 0.7038% |
-| Minor jackpot | 0.3550% |
-| Major jackpot | 0.1852% |
-| Grand jackpot | 0.0601% |
+| Base | 55.0000% |
+| Non-jackpot Hold-and-Spin | 30.4812% |
+| Progressive jackpots | 8.5389% |
 | **Total** | **94.0201%** |
 
-## Feature-lane allocation
+The jackpot subtotal is derived from the requested award odds and the
+progressive award means measured by the final production-kernel run. Grand is
+modeled because a 1-in-15-million event is not estimable from a 10M run alone.
 
-After the 1-in-100 Hold-and-Spin trigger is selected, exactly one route runs. The target allocates 4% of triggers to Mega Combo. Of the other 96%, 13% are Plain and 87% are split equally across the six single-Bag routes. This preserves the legacy 96% single/4% Mega split while correctly interpreting the former seventh conversion weight as the no-Bag Plain route, rather than as a seventh Bag.
+## Route-frequency reconciliation
 
-The route choice is constrained by the Bags actually visible on the triggering base board: Plain is always eligible; a single-Bag route is eligible only when that Bag is visible; Mega requires all six distinct Bags. Route weights and base-reel weights are tuned so the aggregate paid-spin probabilities converge on the targets below.
+The requested mutually exclusive routes are internally inconsistent. Six
+single-Bag routes at 1 in 450 plus Mega at 1 in 1,500 sum to 1.40%, or 1 in
+71.43, while the supplied overall rate is 1.3333%, or 1 in 75.
 
-| Lane | Paid-spin probability | Required conditional mean win |
-|---|---:|---:|
-| Plain | 0.1248% (1 in 801.28) | 35.5684x |
-| Splitter | 0.1392% (1 in 718.39) | 29.6087x |
-| Grow | 0.1392% (1 in 718.39) | 34.7665x |
-| Boost | 0.1392% (1 in 718.39) | 24.8021x |
-| Multiplier | 0.1392% (1 in 718.39) | 28.4246x |
-| Collect | 0.1392% (1 in 718.39) | 44.3604x |
-| Expansion | 0.1392% (1 in 718.39) | 51.4483x |
-| Mega Combo | 0.0400% | 84.8922x |
+The agreed fallback keeps the overall rate, Mega rate, and zero Plain rate as
+hard constraints. The remaining trigger budget is split equally over the six
+single-Bag routes:
 
-The corrected routing changes how the existing non-jackpot feature budget is distributed, not its 37.5414% subtotal. The six named-feature conditional means are retained; their paid-spin frequencies move from 0.1600% to 0.1392%. The resulting 4.4389% remainder is assigned to Plain Hold-and-Spin.
-
-Progressive jackpot awards are accounted for separately from feature wins and must not receive the feature payout multiplier. Their hit rates are calibrated against Gryphon's 3/3/3/3 token-collection rules; the rare Grand lane uses the opportunity-profile calculation described below.
-
-The machine-readable source is `rtp_targets.csv`. The matching presentation copy is `config_render/gryphon_rtp_targets.csv`.
-
-## Current calibrated validation
-
-The current production configuration was validated with 10,000,000 full-game
-rounds (11,124,765 paid spins) using seed `20261014`. The evaluator called the
-production Numba full-game, base-game, and shared Hold-and-Spin kernels; only
-the history storage was replaced by an aggregate tuning sink.
-
-| Metric | Observed | Target | Difference |
+| Route | Paid-spin probability | Odds | Calibrated mean win |
 |---|---:|---:|---:|
-| Total RTP | 93.9892% | 94.0201% | -0.0309 pp |
-| Base RTP | 55.2860% | 55.1746% | +0.1114 pp |
-| Base-game hit rate | 23.7548% | 23.7585% | -0.0038 pp |
-| Hold-and-Spin trigger rate | 0.9984% | 1.0000% | -0.0016 pp |
-| Non-jackpot feature RTP | 37.4351% | 37.5414% | -0.1063 pp |
-| Observed jackpot RTP | 1.2680% | 1.3041% | -0.0361 pp |
+| Splitter | 0.211111% | 1 in 473.68 | 17.8443x |
+| Grow | 0.211111% | 1 in 473.68 | 20.8814x |
+| Boost | 0.211111% | 1 in 473.68 | 15.0000x |
+| Multiplier | 0.211111% | 1 in 473.68 | 17.0231x |
+| Collect | 0.211111% | 1 in 473.68 | 26.4341x |
+| Expansion | 0.211111% | 1 in 473.68 | 31.0319x |
+| Mega Combo | 0.066667% | 1 in 1,500 | 51.2047x |
+| Plain | 0 | disabled | not live |
 
-No Grand jackpot occurred in this sample, which is expected for its modeled
-paid-spin probability of approximately 1 in 38.25 million. Adding the 0.0601%
-modeled Grand contribution to the sampled result gives 94.0493% expected total
-RTP, 0.0292 percentage points above target. Mini, Minor, and Major measured
-0.7203%, 0.3617%, and 0.1861% respectively. Grand therefore requires the
-opportunity-profile calculation or a much larger rare-event certification run;
-a zero-Grand 10-million-round sample must not be interpreted as zero Grand RTP.
+The Plain execution path remains in the Numba engine for compatibility and
+experiments, but its production route-selection weight is zero.
 
-The retained validation artifacts are in `results/`. The selected working
-tolerances for this pass are +/-0.10 percentage points for total expected RTP,
-+/-0.15 points for the base and non-jackpot feature subtotals, +/-0.05 points
-for base hit rate, and +/-0.02 points for overall Hold-and-Spin frequency.
+## Jackpot targets and feasibility
+
+| Jackpot | Requested award odds | Calibrated expected RTP |
+|---|---:|---:|
+| Mini | 1 in 93.75 paid spins | 5.8347% |
+| Minor | 1 in 1,500 paid spins | 1.6126% |
+| Major | 1 in 50,000 paid spins | 0.9916% |
+| Grand | 1 in 15,000,000 paid spins | 0.1000% |
+
+With one token attempt per respin and three matching tokens required, all four
+award odds cannot be met simultaneously. The constrained opportunity-profile
+fit matches Minor, Major, and Grand closely and maximizes Mini at approximately
+1 in 108.3 paid spins. The engine mechanic was preserved; token eligibility
+was not broadened merely to force an infeasible target.
+
+The progressive configuration is:
+
+| Jackpot | Seed | Increment | Cap |
+|---|---:|---:|---:|
+| Mini | 2x | 0.5x | 10x |
+| Minor | 10x | 1x | 25x |
+| Major | 100x | 2x | 500x |
+| Grand | 10,000x | 10x | 15,000x |
+
+## Mechanic-target interpretation
+
+The 6x5 Expansion/Mega backing board starts with three active rows, so at most
+three distinct rows can be unlocked. The supplied averages of 4-4.5 and 4.5-5
+row unlocks are therefore impossible when “row unlocks” means distinct rows.
+The engine reports distinct rows unlocked and all-rows-unlocked frequency.
+
+Likewise, feature credit values are integer xBet units in the shared board
+kernel. Requested average Grow/Boost increments below 1x cannot be represented
+exactly without changing that monetary model; the closest supported tables are
+used and the final feature RTP is corrected only by payout multipliers.
+
+## Retained validation
+
+The final checks use production Numba kernels rather than a tuning-only game
+implementation.
+
+| Check | Result |
+|---|---:|
+| Base, 5M paid spins | 55.0589% RTP; 29.8955% hit rate |
+| Coins per Collector, 3M diagnostic | 3.5128 |
+| Natural Base Collect | 1 in 24.83 exact reel-window odds |
+| Routing, 10M paid spins | 1.33045% H&S; 0 Plain; 0.06639% Mega |
+| Full game, 10M rounds | 10,770,660 paid spins |
+| Full-game sampled RTP | 93.8741% with no Grand observed |
+| Full-game sampled + modeled Grand | 93.9741% |
+| Expected RTP from fixed base, exact routes, and modeled jackpots | 94.0260% |
+
+The expected result is 0.0059 percentage points above the 94.0201% target.
+The observed full-game result is lower because that finite run had a slightly
+low feature-trigger sample and no Grand jackpot.
+
+Retained artifacts:
+
+- `results/new_targets_base_final_5m.json`
+- `results/new_targets_routing_final_10m.json`
+- `results/new_targets_features_20k.json`
+- `results/new_targets_jackpot_fit_20k.json`
+- `results/new_targets_full_final_10m.json`

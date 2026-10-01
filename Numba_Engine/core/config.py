@@ -15,7 +15,7 @@ class JackpotConfig(NamedTuple):
     jackpot_types: np.ndarray
     seed_values: np.ndarray
     increment_values: np.ndarray
-    cap_multiplier: float
+    cap_values: np.ndarray
 
 
 class BaseJackpotOverlayConfig(NamedTuple):
@@ -30,8 +30,8 @@ class BaseJackpotOverlayConfig(NamedTuple):
 JACKPOT_CONFIG = JackpotConfig(
     jackpot_types=np.arange(4, dtype=np.int8),
     seed_values=np.array([2.0, 10.0, 100.0, 10_000.0], dtype=np.float64),
-    increment_values=np.array([0.1, 0.5, 5.0, 50.0], dtype=np.float64),
-    cap_multiplier=2.30,
+    increment_values=np.array([0.5, 1.0, 2.0, 10.0], dtype=np.float64),
+    cap_values=np.array([10.0, 25.0, 500.0, 15_000.0], dtype=np.float64),
 )
 
 
@@ -46,7 +46,7 @@ BASE_JACKPOT_OVERLAY_CONFIG = BaseJackpotOverlayConfig(
 )
 
 
-BASE_PAY_TABLE = 2.0621263050640852 * np.array(
+BASE_PAY_TABLE = 2.05046 * np.array(
     [
         [0.00, 0.00, 1.00, 3.00, 10.00],
         [0.00, 0.00, 0.60, 2.00, 5.00],
@@ -95,13 +95,14 @@ BASE_GAME_CONFIG = BaseGameConfig(
     reelset_path=str(_REELS_ROOT / "Base_Game"),
     # ReelSet_3 is the rare Mega-capable base reelset.  It still travels
     # through the normal reel selection, board generation, SC conversion,
-    # and route-selection kernels.  The weights solve the exact 1.00% H&S
-    # and 0.04% Mega paid-spin targets for the current three reelsets.
+    # and route-selection kernels.  ReelSet_1 and ReelSet_2 expose 1.1% and
+    # 1.2% generic-SC windows; the weights solve the feasible 1-in-75 H&S and
+    # 1-in-1500 Mega paid-spin targets without a post-spin Mega gate.
     reelset_probabilities=np.array(
         [
-            0.04729807822599971,
-            0.9517882952921153,
-            0.0009136264818849668,
+            0.1711049401705778,
+            0.8273723490262805,
+            0.001522710803141613,
         ],
         dtype=np.float64,
     ),
@@ -150,12 +151,12 @@ BASE_GAME_CONFIG = BaseGameConfig(
     collect_symbol=REEL_DICT["COLLECT"],
     max_active_collectors=75,
     coin_drop_probabilities=np.array(
-        [0.0868970065778523, 0.13034550986677843, 0.18827684758534666],
+        [0.0868970065778523, 0.90, 0.90],
         dtype=np.float64,
     ),
     coin_drop_counts=np.array([2, 3, 4, 5, 6], dtype=np.int16),
     coin_drop_count_probabilities=np.array(
-        [0.08, 0.16, 0.34, 0.28, 0.14],
+        [0.10, 0.25, 0.40, 0.15, 0.10],
         dtype=np.float64,
     ),
     coin_credit_values=np.array(
@@ -164,16 +165,16 @@ BASE_GAME_CONFIG = BaseGameConfig(
     ),
     coin_credit_value_probabilities=np.array(
         [
-            0.014581425011130,
-            0.020756800175620,
-            0.041403957230101,
-            0.071979513760192,
-            0.076847652889799,
-            0.123067553102945,
-            0.158980781060996,
-            0.193468259037971,
-            0.189430778346341,
-            0.109483279384903,
+            0.31,
+            0.36,
+            0.25,
+            0.06,
+            0.02,
+            0.00,
+            0.00,
+            0.00,
+            0.00,
+            0.00,
         ],
         dtype=np.float64,
     ),
@@ -222,26 +223,28 @@ class FeatureRtpConfig(NamedTuple):
 
 FEATURE_RTP_CONFIG = FeatureRtpConfig(
     target_total_rtp=0.9402008490918528,
-    base_rtp_locked=0.5517462399913647,
-    target_feature_rtp=0.3884546091004881,
-    overall_feature_probability=0.01,
-    # Corrected route budget: six equal single-Bag lanes at 0.1392%,
-    # Plain at 0.1248%, and Mega Combo at 0.04% of paid spins.
-    plain_feature_probability=0.001248,
-    single_feature_probability=0.001392,
-    mega_feature_probability=1.0 / 2500.0,
+    # The new target set is internally inconsistent: six 1-in-450 singles
+    # plus 1-in-1500 Mega sum to 1-in-71.43, not the requested 1-in-75 total.
+    # The fallback keeps base RTP at 55%, fixes total and Mega frequency, and
+    # allocates the remaining trigger budget symmetrically to the six Bags.
+    base_rtp_locked=0.55,
+    target_feature_rtp=0.3048120552184648,
+    overall_feature_probability=1.0 / 75.0,
+    plain_feature_probability=0.0,
+    single_feature_probability=(1.0 / 75.0 - 1.0 / 1500.0) / 6.0,
+    mega_feature_probability=1.0 / 1500.0,
     # Retained for the standalone compatibility feature helpers.  The
     # Integrated H&S uses six singles, Mega Combo, and Plain categories.
     feature_payout_multiplier=1.0,
     hold_and_spin_payout_multipliers=np.array(
         [
-            1.923051683,
-            1.331275802,
-            1.558106375,
-            1.506248630,
-            2.679141934,
-            2.689860064,
-            0.600905123,
+            1.720929400749,
+            0.941021135063,
+            0.564453709225,
+            1.066429853626,
+            1.566930088682,
+            1.729551533546,
+            0.343879700019,
             3.155013434,
         ],
         dtype=np.float64,
@@ -791,10 +794,14 @@ class HoldAndSpinConfig(NamedTuple):
     single_route_weights: np.ndarray
     bag_resolution_order: np.ndarray
     bag_symbol_actions: np.ndarray
+    bag_activation_probabilities: np.ndarray
     coin_types: np.ndarray
     coin_type_probabilities: np.ndarray
+    mega_coin_type_probabilities: np.ndarray
     p_coin_locked: float
     p_coin_unlocked: float
+    p_coin_locked_by_feature: np.ndarray
+    p_coin_unlocked_by_feature: np.ndarray
     p_coin_locked_by_occupied_count: np.ndarray
     p_coin_unlocked_by_occupied_count: np.ndarray
     coin_type_probabilities_by_occupied_count: np.ndarray
@@ -811,6 +818,8 @@ class HoldAndSpinConfig(NamedTuple):
     grower_increment_probabilities: np.ndarray
     booster_increment_values: np.ndarray
     booster_increment_probabilities: np.ndarray
+    multiplier_cell_counts: np.ndarray
+    multiplier_cell_count_probabilities: np.ndarray
     multiplier_values: np.ndarray
     multiplier_probabilities: np.ndarray
     max_collector_events: int
@@ -837,7 +846,7 @@ HOLD_AND_SPIN_CONFIG = HoldAndSpinConfig(
     ),
     coin_values=np.array([1, 2, 4, 8, 10], dtype=np.int16),
     coin_value_probabilities=np.array(
-        [0.52, 0.30, 0.10, 0.05, 0.03],
+        [0.98, 0.015, 0.004, 0.0005, 0.0005],
         dtype=np.float64,
     ),
     splitter_symbol=REEL_DICT["SC1"],
@@ -857,18 +866,22 @@ HOLD_AND_SPIN_CONFIG = HoldAndSpinConfig(
         ],
         dtype=np.int16,
     ),
-    # With a partial set of visible Bags, route exactly one session to either
-    # the plain feature or one of the visible single-Bag powers.  These are
-    # relative selection weights, deliberately kept in configuration so the
-    # eventual RTP pass can tune them without changing engine flow.
-    # With the exact reel weights above, this relative Plain weight produces
-    # 0.1248% Plain and 0.1392% for each symmetric single-Bag route.
-    plain_route_weight=0.15715977237809114,
+    # With a partial set of visible Bags, route exactly one session to one of
+    # the visible single-Bag powers.  The Plain route remains implemented for
+    # compatibility and experiments, but its live selection weight is zero.
+    plain_route_weight=0.0,
     single_route_weights=np.ones(6, dtype=np.float64),
     # Expansion, Splitter, Booster, Grower, Multiplier, Collector.
     bag_resolution_order=np.array([5, 0, 2, 1, 3, 4], dtype=np.int8),
     # 0 = remain, 1 = disappear, 2 = convert to a credit coin.
-    bag_symbol_actions=np.array([2, 0, 1, 1, 1, 2], dtype=np.int8),
+    bag_symbol_actions=np.array([2, 0, 1, 1, 1, 1], dtype=np.int8),
+    # Growers persist on the board and activate probabilistically each
+    # respin, matching the legacy tuning control without bypassing the shared
+    # Numba kernel. Other Bags resolve whenever they are active.
+    bag_activation_probabilities=np.array(
+        [1.0, 0.18, 1.0, 1.0, 1.0, 1.0],
+        dtype=np.float64,
+    ),
     coin_types=np.array(
         [
             REEL_DICT["COIN"],
@@ -882,11 +895,29 @@ HOLD_AND_SPIN_CONFIG = HoldAndSpinConfig(
         dtype=np.int16,
     ),
     coin_type_probabilities=np.array(
-        [0.600, 0.055, 0.105, 0.090, 0.060, 0.050, 0.040],
+        [0.41, 0.07, 0.08, 0.16, 0.13, 0.11, 0.04],
         dtype=np.float64,
     ),
-    p_coin_locked=0.0255,
-    p_coin_unlocked=0.0425,
+    # Mega uses the same landing kernel with its own configured type table.
+    # This keeps its six-power 6x5 pacing tunable without changing any
+    # single-Bag route or adding a separate feature implementation.
+    mega_coin_type_probabilities=np.array(
+        [0.35, 0.03, 0.06, 0.18, 0.14, 0.12, 0.12],
+        dtype=np.float64,
+    ),
+    p_coin_locked=0.045,
+    p_coin_unlocked=0.075,
+    # Route indices are SC1-SC6, Mega, Plain. Negative entries fall back to
+    # the shared scalar, allowing tuning to specialize pacing without adding
+    # route-specific execution branches.
+    p_coin_locked_by_feature=np.array(
+        [-1.0, -1.0, -1.0, -1.0, -1.0, 0.040, 0.060, -1.0],
+        dtype=np.float64,
+    ),
+    p_coin_unlocked_by_feature=np.array(
+        [0.055, 0.100, 0.085, 0.085, 0.078, 0.075, 0.075, 0.075],
+        dtype=np.float64,
+    ),
     # A negative entry falls back to the scalar probability above.  Tuning
     # can replace individual entries (0..30 occupied cells) without changing
     # the runtime kernel or embedding a search strategy in the engine.
@@ -897,54 +928,62 @@ HOLD_AND_SPIN_CONFIG = HoldAndSpinConfig(
     coin_type_probabilities_by_occupied_count=np.full(
         (31, 7), -1.0, dtype=np.float64
     ),
-    # A newly landed Coin, Splitter, Grower, or Collector resets the counter.
-    # Booster, Multiplier, and Expansion resolve without resetting it.  These
-    # flags are independent of each Bag's configured post-resolution action.
+    # Every landed Coin or Bag resets the counter. Disappearing Booster and
+    # Multiplier Bags therefore extend the session without occupying a cell,
+    # matching the random effect-spin pacing in the new target sheet.
     coin_type_respin_reset_flags=np.array(
-        [True, True, True, False, False, True, False],
+        [True, True, True, True, True, True, True],
         dtype=np.bool_,
     ),
     respin_reset_count=3,
     max_coin_value=15000,
     splitter_source_counts=np.array([1, 2, 3], dtype=np.int8),
     splitter_source_count_probabilities=np.array(
-        [0.72, 0.21, 0.07],
+        [0.10, 0.55, 0.35],
         dtype=np.float64,
     ),
     splitter_copy_counts=np.array([1, 2, 3], dtype=np.int8),
     splitter_copy_count_probabilities=np.array(
-        [0.76, 0.19, 0.05],
+        [0.10, 0.55, 0.35],
         dtype=np.float64,
     ),
-    grower_coin_counts=np.array([1, 2, 3], dtype=np.int8),
+    grower_coin_counts=np.array([2, 3, 4, 5], dtype=np.int8),
     grower_coin_count_probabilities=np.array(
-        [0.70, 0.23, 0.07],
+        [0.15, 0.35, 0.35, 0.15],
         dtype=np.float64,
     ),
     grower_increment_values=np.array([1, 2, 5], dtype=np.int16),
     grower_increment_probabilities=np.array(
-        [0.74, 0.21, 0.05],
+        [0.9997, 0.0002, 0.0001],
         dtype=np.float64,
     ),
     booster_increment_values=np.array([1, 2, 5, 10], dtype=np.int16),
     booster_increment_probabilities=np.array(
-        [0.68, 0.22, 0.08, 0.02],
+        [0.9994, 0.0003, 0.0002, 0.0001],
+        dtype=np.float64,
+    ),
+    multiplier_cell_counts=np.array([3, 4, 5], dtype=np.int8),
+    multiplier_cell_count_probabilities=np.array(
+        [0.80, 0.15, 0.05],
         dtype=np.float64,
     ),
     multiplier_values=np.array([2, 3, 4], dtype=np.int8),
     multiplier_probabilities=np.array(
-        [0.76, 0.19, 0.05],
+        [0.45, 0.40, 0.15],
         dtype=np.float64,
     ),
     max_collector_events=3,
     rows_unlocked_per_expansion=1,
-    jackpot_token_probability=0.654393195373,
+    # The one-token-per-respin mechanic cannot satisfy all four supplied hit
+    # rates exactly. This constrained fit matches Minor, Major, and Grand and
+    # maximizes Mini without altering token eligibility or session flow.
+    jackpot_token_probability=0.999999936176,
     jackpot_type_probabilities=np.array(
         [
-            0.685198458543,
-            0.227971018682,
-            0.076090566398,
-            0.010739956376,
+            0.829453034722,
+            0.132182383164,
+            0.033645885563,
+            0.004718696551,
         ],
         dtype=np.float64,
     ),
@@ -985,6 +1024,7 @@ class FullGameConfig(NamedTuple):
     jackpot_tokens: JackpotTokenConfig
     feature_rtp: FeatureRtpConfig
     hold_and_spin: HoldAndSpinConfig
+    max_win: float
     features: GameFeatureConfigs
 
 
@@ -995,6 +1035,7 @@ FULL_GAME_CONFIG = FullGameConfig(
     jackpot_tokens=JACKPOT_TOKEN_CONFIG,
     feature_rtp=FEATURE_RTP_CONFIG,
     hold_and_spin=HOLD_AND_SPIN_CONFIG,
+    max_win=15_000.0,
     features=FEATURE_CONFIGS,
 )
 

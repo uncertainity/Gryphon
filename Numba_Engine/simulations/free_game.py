@@ -47,6 +47,20 @@ def validate_hold_and_spin_config(rules):
     if not 0.0 <= rules.p_coin_unlocked <= 1.0:
         raise ValueError("p_coin_unlocked must be between zero and one")
 
+    expected_route_shape = (len(rules.bag_symbols) + 2,)
+    route_probability_tables = (
+        ("p_coin_locked_by_feature", rules.p_coin_locked_by_feature),
+        ("p_coin_unlocked_by_feature", rules.p_coin_unlocked_by_feature),
+    )
+    for name, probabilities in route_probability_tables:
+        if probabilities.shape != expected_route_shape:
+            raise ValueError(f"{name} must contain one entry per route")
+        if not np.all(np.isfinite(probabilities)):
+            raise ValueError(f"{name} must contain only finite values")
+        configured = probabilities[probabilities >= 0.0]
+        if np.any(configured > 1.0):
+            raise ValueError(f"Configured {name} values cannot exceed one")
+
     expected_state_shape = (max_positions + 1,)
     state_tables = (
         (
@@ -102,6 +116,17 @@ def validate_hold_and_spin_config(rules):
         rules.coin_type_probabilities.sum(), 1.0
     ):
         raise ValueError("coin_type_probabilities must sum to one")
+    if rules.mega_coin_type_probabilities.shape != (num_coin_types,):
+        raise ValueError(
+            "mega_coin_type_probabilities must match coin_types"
+        )
+    if not np.all(np.isfinite(rules.mega_coin_type_probabilities)) or np.any(
+        rules.mega_coin_type_probabilities < 0.0
+    ) or not np.isclose(
+        rules.mega_coin_type_probabilities.sum(),
+        1.0,
+    ):
+        raise ValueError("mega_coin_type_probabilities must sum to one")
     if rules.coin_type_respin_reset_flags.shape != (num_coin_types,):
         raise ValueError("coin_type_respin_reset_flags must match coin_types")
     if num_coin_types != len(rules.bag_symbols) + 1 or not np.array_equal(
@@ -136,6 +161,18 @@ def validate_hold_and_spin_config(rules):
         rules.bag_symbol_actions > 2
     ):
         raise ValueError("bag_symbol_actions contains an unknown action")
+    if rules.bag_activation_probabilities.shape != (
+        len(rules.bag_symbols),
+    ):
+        raise ValueError(
+            "bag_activation_probabilities must contain one value per Bag"
+        )
+    if not np.all(np.isfinite(rules.bag_activation_probabilities)) or np.any(
+        rules.bag_activation_probabilities < 0.0
+    ) or np.any(rules.bag_activation_probabilities > 1.0):
+        raise ValueError(
+            "bag_activation_probabilities must be between zero and one"
+        )
     if not 0.0 <= rules.jackpot_token_probability <= 1.0:
         raise ValueError("jackpot_token_probability must be between zero and one")
     if np.any(rules.jackpot_type_probabilities < 0.0) or not np.isclose(

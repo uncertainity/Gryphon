@@ -62,6 +62,7 @@ from .core.hold_and_spin_kernels import (
     grower_bag,
     hold_and_spin,
     multiplier_bag,
+    place_multiplier_cells,
     splitter_bag,
 )
 from .core.storage import FullGameStorage, HoldAndSpinStorage, Storage
@@ -171,6 +172,7 @@ __all__ = [
     "make_board",
     "make_base_jackpot_overlay",
     "multiplier_bag",
+    "place_multiplier_cells",
     "make_reel_collection",
     "make_reel_collections",
     "format_base_game_statistics",

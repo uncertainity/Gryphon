@@ -25,6 +25,7 @@ from .evaluate import (
     load_feature_targets,
     load_game_targets,
 )
+from .targets import jackpot_award_rate_targets
 
 
 JACKPOT_NAMES = ("Mini", "Minor", "Major", "Grand")
@@ -33,7 +34,7 @@ JACKPOT_NAMES = ("Mini", "Minor", "Major", "Grand")
 # Minor assumptions are initialized from integrated production simulations
 # and are refined by the subsequent full-game validation pass.
 DEFAULT_AVERAGE_AWARDS = np.array(
-    [4.10, 22.70, 230.0, 23_000.0], dtype=np.float64
+    [6.0, 25.0, 500.0, 15_000.0], dtype=np.float64
 )
 
 
@@ -191,16 +192,8 @@ def tune(
         seed,
         config,
     )
-    game_targets = load_game_targets()
-    target_paid_rates = np.array(
-        [
-            game_targets[f"{jackpot_name} RTP"] / average_awards[index]
-            for index, jackpot_name in enumerate(JACKPOT_NAMES)
-        ],
-        dtype=np.float64,
-    )
-    overall_trigger_rate = game_targets["H&S trigger rate"]
-    target_session_rates = target_paid_rates / overall_trigger_rate
+    target_paid_rates, target_session_rates = jackpot_award_rate_targets()
+    overall_trigger_rate = load_game_targets()["H&S trigger rate"]
 
     initial_type_probabilities = (
         config.hold_and_spin.jackpot_type_probabilities
@@ -304,16 +297,18 @@ def main(argv=None) -> dict:
         JACKPOT_NAMES, result["type_probabilities"]
     ):
         print(f"  {name:<6} {probability:.12f}")
-    print("Predicted RTP:")
+    print("Predicted paid-spin award rates:")
     for name, observed, target in zip(
         JACKPOT_NAMES,
-        result["predicted_rtps"],
-        (
-            load_game_targets()[f"{name} RTP"]
-            for name in JACKPOT_NAMES
-        ),
+        result["predicted_paid_award_rates"],
+        result["target_paid_award_rates"],
     ):
-        print(f"  {name:<6} {observed:.6%} (target {target:.6%})")
+        observed_odds = 1.0 / observed if observed > 0.0 else np.inf
+        target_odds = 1.0 / target if target > 0.0 else np.inf
+        print(
+            f"  {name:<6} 1 in {observed_odds:,.2f} "
+            f"(target 1 in {target_odds:,.2f})"
+        )
 
     output_path = args.json_output.resolve()
     tuning_root = Path(__file__).resolve().parent

@@ -1,0 +1,104 @@
+{
+  "routing": {
+    "spins": 10000000,
+    "seed": 20261001,
+    "trigger_count": 133045,
+    "trigger_rate": 0.0133045,
+    "target_trigger_rate": 0.013333333333333336,
+    "routes": [
+      {
+        "route": "Splitter",
+        "count": 20958,
+        "rate": 0.0020958,
+        "target_rate": 0.0021111111111111113,
+        "delta": -1.5311111111111254e-05
+      },
+      {
+        "route": "Grow",
+        "count": 20916,
+        "rate": 0.0020916,
+        "target_rate": 0.0021111111111111113,
+        "delta": -1.9511111111111465e-05
+      },
+      {
+        "route": "Boost",
+        "count": 21230,
+        "rate": 0.002123,
+        "target_rate": 0.0021111111111111113,
+        "delta": 1.188888888888854e-05
+      },
+      {
+        "route": "Multiplier",
+        "count": 21217,
+        "rate": 0.0021217,
+        "target_rate": 0.0021111111111111113,
+        "delta": 1.0588888888888454e-05
+      },
+      {
+        "route": "Collect",
+        "count": 21077,
+        "rate": 0.0021077,
+        "target_rate": 0.0021111111111111113,
+        "delta": -3.411111111111236e-06
+      },
+      {
+        "route": "Expansion",
+        "count": 21008,
+        "rate": 0.0021008,
+        "target_rate": 0.0021111111111111113,
+        "delta": -1.0311111111111458e-05
+      },
+      {
+        "route": "Mega Combo",
+        "count": 6639,
+        "rate": 0.0006639,
+        "target_rate": 0.0006666666666666666,
+        "delta": -2.7666666666666074e-06
+      },
+      {
+        "route": "Plain",
+        "count": 0,
+        "rate": 0.0,
+        "target_rate": 0.0,
+        "delta": 0.0
+      }
+    ],
+    "reelset_counts": [
+      1709780,
+      8275029,
+      15191
+    ],
+    "trigger_counts_by_reelset": [
+      18846,
+      99008,
+      15191
+    ],
+    "sc_count_histogram": [
+      0,
+      116141,
+      1713,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      15191,
+      0,
+      0,
+      0
+    ],
+    "distinct_bag_histogram": [
+      0,
+      116420,
+      1434,
+      73,
+      1544,
+      6935,
+      6639
+    ]
+  }
+}

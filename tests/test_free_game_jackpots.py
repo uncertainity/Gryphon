@@ -15,6 +15,8 @@ def _jackpot_certain_config():
     return HOLD_AND_SPIN_CONFIG._replace(
         p_coin_locked=1.0,
         p_coin_unlocked=1.0,
+        p_coin_locked_by_feature=np.full(8, -1.0),
+        p_coin_unlocked_by_feature=np.full(8, -1.0),
         coin_types=np.array([HOLD_AND_SPIN_CONFIG.coin_types[0]], dtype=np.int16),
         coin_type_probabilities=np.array([1.0]),
         jackpot_token_probability=1.0,
@@ -119,6 +121,8 @@ def test_plain_route_uses_three_by_five_payload_and_zero_starting_bags(
     config = HOLD_AND_SPIN_CONFIG._replace(
         p_coin_locked=0.0,
         p_coin_unlocked=0.0,
+        p_coin_locked_by_feature=np.full(8, -1.0),
+        p_coin_unlocked_by_feature=np.full(8, -1.0),
         starting_coin_counts=np.array([1], dtype=np.int8),
         starting_coin_count_probabilities=np.array([1.0]),
     )

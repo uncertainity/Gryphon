@@ -21,7 +21,14 @@ def test_base_coin_credit_table_is_normalized_and_targets_tuned_average_value():
             rules.coin_credit_values,
             rules.coin_credit_value_probabilities,
         ),
-        1.4132084363668658,
+        0.361,
+    )
+    assert np.isclose(
+        np.dot(
+            rules.coin_drop_counts,
+            rules.coin_drop_count_probabilities,
+        ),
+        3.90,
     )
 
 
@@ -71,7 +78,38 @@ def test_base_reel_collection_loads_all_reelsets_with_configured_weights():
         reels.weights,
         reelset_trigger_probabilities,
     )
-    assert np.isclose(combined_trigger_probability, 0.01)
+    assert np.isclose(
+        combined_trigger_probability,
+        1.0 / 75.0,
+    )
+    np.testing.assert_allclose(
+        reelset_trigger_probabilities,
+        np.array([0.011, 0.012, 1.0]),
+    )
+
+    collector_window_probabilities = np.zeros(reels.reelsets.shape[0])
+    for reelset_index in range(reels.reelsets.shape[0]):
+        no_collector_probability = 1.0
+        for reel in range(BASE_GAME_CONFIG.num_reels):
+            reel_length = reels.lengths[reelset_index, reel]
+            strip = reels.reelsets[reelset_index, :reel_length, reel]
+            collector_stops = 0
+            for stop in range(reel_length):
+                visible = np.array(
+                    [strip[(stop + row) % reel_length] for row in range(3)]
+                )
+                if np.any(visible == BASE_GAME_CONFIG.collect_symbol):
+                    collector_stops += 1
+            no_collector_probability *= 1.0 - collector_stops / reel_length
+        collector_window_probabilities[reelset_index] = (
+            1.0 - no_collector_probability
+        )
+
+    collector_window_probability = np.dot(
+        reels.weights,
+        collector_window_probabilities,
+    )
+    assert 1.0 / 25.0 <= collector_window_probability <= 1.0 / 20.0
 
     # Every ReelSet_3 stop exposes twelve generic SCs.  Mega is therefore
     # reachable through ordinary base-reel generation and independent SC

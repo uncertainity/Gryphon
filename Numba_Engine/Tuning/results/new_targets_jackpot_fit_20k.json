@@ -1,0 +1,83 @@
+{
+  "sessions_per_route": 20000,
+  "seed": 20261013,
+  "token_probability": 0.9999999361755364,
+  "type_probabilities": [
+    0.8294530347216879,
+    0.13218238316418224,
+    0.03364588556294338,
+    0.00471869655118644
+  ],
+  "average_award_assumptions": [
+    6.0,
+    25.0,
+    500.0,
+    15000.0
+  ],
+  "target_paid_award_rates": [
+    0.010666666666666668,
+    0.0006666666666666666,
+    2e-05,
+    6.666666666666667e-08
+  ],
+  "predicted_paid_award_rates": [
+    0.009233729944993448,
+    0.0006631990211556438,
+    1.9978659046963684e-05,
+    6.665730744351376e-08
+  ],
+  "predicted_rtps": [
+    0.055402379669960686,
+    0.016579975528891094,
+    0.009989329523481843,
+    0.0009998596116527064
+  ],
+  "optimization_success": true,
+  "optimization_cost": 0.010419729247953884,
+  "opportunity_profiles": {
+    "unique_weighted_profiles": 88332,
+    "weight_sum": 1.0,
+    "routes": {
+      "Splitter": {
+        "sessions": 20000,
+        "unique_profiles": 2375,
+        "average_opportunities": 1.9718
+      },
+      "Grow": {
+        "sessions": 20000,
+        "unique_profiles": 13836,
+        "average_opportunities": 6.80435
+      },
+      "Boost": {
+        "sessions": 20000,
+        "unique_profiles": 14918,
+        "average_opportunities": 7.10305
+      },
+      "Multiplier": {
+        "sessions": 20000,
+        "unique_profiles": 14919,
+        "average_opportunities": 7.2744
+      },
+      "Collect": {
+        "sessions": 20000,
+        "unique_profiles": 13734,
+        "average_opportunities": 6.7226
+      },
+      "Expansion": {
+        "sessions": 20000,
+        "unique_profiles": 18145,
+        "average_opportunities": 14.494
+      },
+      "Mega Combo": {
+        "sessions": 20000,
+        "unique_profiles": 12858,
+        "average_opportunities": 5.24355
+      },
+      "Plain": {
+        "sessions": 20000,
+        "unique_profiles": 12390,
+        "average_opportunities": 7.10225
+      }
+    }
+  }
+}

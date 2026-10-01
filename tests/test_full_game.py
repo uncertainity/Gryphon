@@ -145,6 +145,27 @@ def test_full_game_executes_and_reports_shared_hold_and_spin(
     assert "Award Rate" in report
 
 
+def test_full_game_applies_the_hard_cap_to_the_complete_round():
+    config = FULL_GAME_CONFIG._replace(max_win=0.5)
+    reels = _single_stop_reels([REEL_DICT["H1"]] * 5)
+    base, hold_and_spin, full = _new_storages(1, config)
+
+    result = run_one_full_round(
+        reels,
+        config,
+        JACKPOT_CONFIG.seed_values.copy(),
+        base,
+        hold_and_spin,
+        full,
+    )
+
+    assert np.isclose(result[0], 0.5)
+    assert np.isclose(result[1], 0.5)
+    assert result[2] == 0.0
+    assert result[3] == 0.0
+    assert np.isclose(full.spin_base_wins[0], 0.5)
+
+
 def test_partial_bag_set_selects_plain_or_one_visible_single_route():
     pay_window = np.zeros((3, 5), dtype=np.int16)
     pay_window[0, 0] = REEL_DICT["SC1"]
@@ -190,6 +211,18 @@ def test_partial_bag_set_selects_plain_or_one_visible_single_route():
     assert len(
         starting_bags_for_route(feature_index, plain_rules.bag_symbols)
     ) == 0
+
+
+def test_production_partial_bag_set_cannot_select_plain():
+    rules = FULL_GAME_CONFIG.hold_and_spin
+    assert rules.plain_route_weight == 0.0
+    feature_flags = np.array(
+        [True, True, False, False, False, False],
+        dtype=np.bool_,
+    )
+
+    for _ in range(100):
+        assert select_feature_route(feature_flags, False, rules) in (0, 1)
 
 
 def test_all_six_visible_bags_route_to_one_mega_combo_session():
@@ -243,7 +276,7 @@ def test_compact_full_game_sizes_feature_history_from_trigger_rate():
         compact_base=True,
     )
 
-    assert hold_and_spin.session_wins.shape[0] == 257
+    assert hold_and_spin.session_wins.shape[0] == 332
     assert hold_and_spin.session_wins.shape[0] < full.spin_base_wins.shape[0]
 
 

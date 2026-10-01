@@ -33,16 +33,17 @@ begin paid round
     -> identify the distinct visible Bag types
     -> advance walking base Collectors for the next paid spin
     -> select exactly one eligible route
-         -> Plain, or one visible SC1-SC6 single-Bag route
+         -> one visible SC1-SC6 single-Bag route
          -> Mega Combo when all six distinct Bags are visible
     -> start exactly one Hold-and-Spin session
-         -> Plain and SC1-SC5 use a logical 3x5 board
+         -> SC1-SC5 use a logical 3x5 board
          -> Expansion and Mega use a 6x5-capable board
          -> one respin counter and one set of jackpot meters
          -> only Bags enabled by the selected route may land
          -> Expansion unlocks rows on the same board
          -> resolve Bags in the configured order
     -> pay non-jackpot feature win and any progressive jackpots
+    -> enforce the 15,000x cap across the complete wager round
     -> repeat a paid spin while a Collector remains
     -> finish the round
 ```
@@ -87,8 +88,8 @@ The integrated feature runner records which of the six Bag types are visible:
 | `SC6` | Expansion |
 
 Duplicate symbols do not create extra sessions or extra route entries. For
-example, `SC1, SC2, SC1` makes three routes eligible: Plain, Splitter, or
-Grower. Configured relative weights choose exactly one of them.
+example, `SC1, SC2, SC1` makes Splitter and Grower eligible. Configured
+relative weights choose exactly one of them.
 
 There is no `SC7` conversion outcome. A partial set of different Bags is never
 combined. Mega Combo is eligible only when all six distinct symbols `SC1`
@@ -117,29 +118,32 @@ Every session owns exactly one of each of the following:
 - four jackpot-token meters; and
 - detailed session/respin/step storage history.
 
-The eight reporting routes are Splitter, Grow, Boost, Multiplier, Collect,
-Expansion, Mega Combo, and Plain. One and only one route is recorded for each
-triggered session.
+The eight storage/reporting slots are Splitter, Grow, Boost, Multiplier,
+Collect, Expansion, Mega Combo, and Plain. Plain remains implemented for
+compatibility, but its live route weight is zero. One and only one live route
+is recorded for each triggered session.
 
-For a partial Bag set, the eligible pool is Plain plus one route for each
-distinct visible Bag. The configured relative weights choose from that pool.
-For example, converted `SC1, SC2, SC1` makes Plain, Splitter, and Grow eligible;
-it does not launch two boards and the duplicate `SC1` does not add another
-Splitter entry. When all six distinct Bags are visible, Mega bypasses this
-partial-set choice and is selected as the single route.
+For a partial Bag set, the eligible pool contains one route for each distinct
+visible Bag. The configured relative weights choose from that pool. For
+example, converted `SC1, SC2, SC1` makes Splitter and Grow eligible; it does
+not launch two boards and the duplicate `SC1` does not add another Splitter
+entry. When all six distinct Bags are visible, Mega bypasses this partial-set
+choice and is selected as the single route.
 
 ## 4. Logical board size and fixed-shape storage
 
 Numba storage arrays use one fixed maximum shape of 6x5. This is a storage
 envelope, not a rule that every route plays on six rows.
 
-For Plain and the SC1-SC5 routes:
+For the SC1-SC5 routes:
 
 - the logical board is 3x5;
 - the upper three storage rows are inactive padding and are never spun,
   occupied, counted, or paid; and
-- Plain starts without a Bag, while a single-Bag route starts with exactly its
-  selected Bag.
+- a single-Bag route starts with exactly its selected Bag.
+
+The retained Plain compatibility path also uses a logical 3x5 board and starts
+without a Bag, but production routing cannot currently select it.
 
 For Expansion and Mega Combo:
 
@@ -190,7 +194,9 @@ awarded jackpot to its configured seed.
 
 Jackpot types are always sampled from the configured fixed type weights. Once
 a type has awarded in the current session, a later draw of that type is
-non-awarding; its probability mass is not reassigned to rarer types.
+non-awarding; its probability mass is not reassigned to rarer types. The
+production configuration permits at most one token attempt per respin, and an
+attempt selecting an already-awarded tier is consumed rather than retried.
 
 ## 7. Bag resolution order
 
@@ -232,8 +238,10 @@ value to them.
 
 ### Multiplier
 
-Multiplier multiplies every supplied active Coin by a sampled value, subject
-to the configured Coin-value cap.
+Multiplier places sampled 2x, 3x, or 4x multipliers onto a configured number
+of empty active cells. An unused multiplier remains until the end of the
+feature. When a natural Coin lands on that cell, its value is multiplied and
+the cell multiplier is consumed.
 
 ### Collector
 
@@ -258,13 +266,13 @@ The default actions are:
 | Booster | disappear |
 | Multiplier | disappear |
 | Collector | disappear |
-| Expansion | convert to Coin |
+| Expansion | disappear |
 
 Reset behavior is also config data aligned with the landing-symbol types. By
-default, a newly landed natural Coin, Splitter, Grower, or Collector resets the
-counter to three when its position is active after Expansion resolution.
-Booster, Multiplier, and Expansion do not reset under the configured reset
-flags. Mechanic-created Coins do not create reset chains.
+default, every newly landed natural Coin or Bag resets the counter to three
+when its position is active after Expansion resolution. A disappearing Bag
+can therefore extend the session without remaining on the board.
+Mechanic-created Coins do not create reset chains.
 
 If no qualifying symbol landed, the remaining-respins counter decreases by
 one. The feature ends when the counter reaches zero or the active area has no
@@ -285,6 +293,11 @@ factor for its starting-Bag reporting category: Splitter, Grow, Boost,
 Multiplier, Collect, Expansion, Mega Combo, or Plain. This does not route into
 another feature implementation or alter board play. Progressive jackpot
 awards are paid separately and are never passed through these multipliers.
+
+The full-game runner caps the combined Base, Hold-and-Spin, and progressive
+award at 15,000x for the complete wager round, including any walking-Collector
+continuation spins. Progressive meters still reset when their awarded value is
+partially or fully clipped by the cap.
 
 The same feature result is written to:
 
@@ -321,20 +334,21 @@ spin while a walking Collector remains on the base window.
 
 | Selected route | Paid-spin probability | Average paid spins per trigger |
 |---|---:|---:|
-| Plain | 0.1248% | 1 in 801.28 |
-| Splitter (`SC1`) | 0.1392% | 1 in 718.39 |
-| Grow (`SC2`) | 0.1392% | 1 in 718.39 |
-| Boost (`SC3`) | 0.1392% | 1 in 718.39 |
-| Multiplier (`SC4`) | 0.1392% | 1 in 718.39 |
-| Collect (`SC5`) | 0.1392% | 1 in 718.39 |
-| Expansion (`SC6`) | 0.1392% | 1 in 718.39 |
-| Mega Combo (`SC1`-`SC6`) | 0.0400% | 1 in 2,500 |
-| **Any Hold-and-Spin** | **1.0000%** | **1 in 100** |
+| Plain | 0.0000% | disabled |
+| Splitter (`SC1`) | 0.211111% | 1 in 473.68 |
+| Grow (`SC2`) | 0.211111% | 1 in 473.68 |
+| Boost (`SC3`) | 0.211111% | 1 in 473.68 |
+| Multiplier (`SC4`) | 0.211111% | 1 in 473.68 |
+| Collect (`SC5`) | 0.211111% | 1 in 473.68 |
+| Expansion (`SC6`) | 0.211111% | 1 in 473.68 |
+| Mega Combo (`SC1`-`SC6`) | 0.066667% | 1 in 1,500 |
+| **Any Hold-and-Spin** | **1.333333%** | **1 in 75** |
 
-The six single-Bag rows total 0.8352%. These values are the configured
-long-run allocations, not hard launch gates: an individual simulation will
-fluctuate around them. The exact controls and retained validation measurements
-are documented in `Tuning/TUNING_SUMMARY.md`.
+The six single-Bag rows total 1.266667%. These values are configured long-run
+allocations produced by the base reels and route selector, not post-spin
+launch gates; an individual simulation fluctuates around them. The exact
+controls and retained validation measurements are documented in
+`Tuning/TUNING_SUMMARY.md`.
 
 ## 12. Full-game execution, storage, and statistics
 

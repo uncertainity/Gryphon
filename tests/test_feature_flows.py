@@ -129,6 +129,7 @@ def test_integrated_hold_and_spin_has_one_multiplier_per_reporting_category():
 
 def test_integrated_route_probability_budget_sums_to_overall_target():
     probabilities = FEATURE_RTP_CONFIG
+    assert probabilities.plain_feature_probability == 0.0
     assert np.isclose(
         probabilities.plain_feature_probability
         + 6 * probabilities.single_feature_probability

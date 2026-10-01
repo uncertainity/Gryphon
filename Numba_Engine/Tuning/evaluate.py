@@ -49,6 +49,7 @@ from ..simulations.full_game import (
     starting_bags_for_route,
     validate_full_game_config,
 )
+from .targets import reconciled_feature_probabilities, reconciled_rtp_budget
 
 
 TARGET_PATH = Path(__file__).with_name("rtp_targets.csv")
@@ -59,6 +60,68 @@ compact_hold_and_spin_storage_spec = [
     ("respin_count", int64),
     ("session_count", int64),
 ]
+
+
+base_tuning_storage_spec = [
+    ("spin_count", int64),
+    ("round_count", int64),
+    ("collector_active_spin_count", int64),
+    ("collector_symbol_count", int64),
+    ("collected_coin_cell_count", int64),
+    ("coin_drop_spin_count", int64),
+    ("coin_drop_cell_count", int64),
+]
+
+
+@jitclass(base_tuning_storage_spec)
+class BaseTuningStorage:
+    """Aggregate base sink for the new Collect-frequency constraints."""
+
+    def __init__(self):
+        self.spin_count = 0
+        self.round_count = 0
+        self.collector_active_spin_count = 0
+        self.collector_symbol_count = 0
+        self.collected_coin_cell_count = 0
+        self.coin_drop_spin_count = 0
+        self.coin_drop_cell_count = 0
+
+    def begin_round(self):
+        return
+
+    def finish_round(self, round_win, round_triggers):
+        self.round_count += 1
+
+    def save_spin(
+        self,
+        board,
+        coin_value_board,
+        jackpot_overlay_board,
+        jackpot_values_before,
+        jackpot_values_after,
+        jackpot_increment_counts,
+        line_win,
+        collect_win,
+        symbol_wins,
+        symbol_hit_counts,
+        line_winning_symbols,
+        line_match_counts,
+        line_win_amounts,
+        free_game_trigger,
+        collector_count,
+    ):
+        coin_cells = 0
+        for value in coin_value_board.ravel():
+            if value > 0.0:
+                coin_cells += 1
+        if coin_cells > 0:
+            self.coin_drop_spin_count += 1
+            self.coin_drop_cell_count += coin_cells
+        if collector_count > 0:
+            self.collector_active_spin_count += 1
+            self.collector_symbol_count += collector_count
+            self.collected_coin_cell_count += coin_cells * collector_count
+        self.spin_count += 1
 
 
 @jitclass(compact_hold_and_spin_storage_spec)
@@ -219,12 +282,11 @@ def load_feature_targets(path: Path = TARGET_PATH) -> tuple[np.ndarray, np.ndarr
             if row["category"] == "feature":
                 rows[row["component"]] = row
 
-    probabilities = np.zeros(len(FEATURE_NAMES), dtype=np.float64)
+    probabilities, _ = reconciled_feature_probabilities()
     conditional_means = np.zeros(len(FEATURE_NAMES), dtype=np.float64)
     for feature_index, feature_name in enumerate(FEATURE_NAMES):
         target_name = aliases.get(feature_name, feature_name)
         row = rows[target_name]
-        probabilities[feature_index] = float(row["internal_lane_probability"])
         conditional_means[feature_index] = float(
             row["target_conditional_mean_win"]
         )
@@ -248,6 +310,15 @@ def load_game_targets(path: Path = TARGET_PATH) -> dict[str, float]:
                 result["H&S trigger rate"] = float(
                     row["target_hold_and_spin_trigger_rate"]
                 )
+    _, trigger_diagnostics = reconciled_feature_probabilities()
+    # The new sheet's fallback fixes base RTP and treats the overall/Mega
+    # trigger targets as hard constraints. Component RTPs remain useful as
+    # reporting references until the final calibrated mix is written back.
+    result.update(reconciled_rtp_budget())
+    result["Base hit rate"] = 0.25
+    result["H&S trigger rate"] = trigger_diagnostics[
+        "overall_probability"
+    ]
     return result
 
 
@@ -255,7 +326,7 @@ def load_game_targets(path: Path = TARGET_PATH) -> dict[str, float]:
 def _evaluate_base_kernel(initial_reels, config, num_spins, seed):
     """Measure base math by calling the production paid-spin resolver."""
     np.random.seed(seed)
-    storage = CompactBaseStorage()
+    storage = BaseTuningStorage()
     jackpot_values = config.jackpots.seed_values.copy()
     collector_positions = np.empty(
         config.base_game.max_active_collectors, dtype=np.int32
@@ -310,6 +381,11 @@ def _evaluate_base_kernel(initial_reels, config, num_spins, seed):
         positive_collect_spins,
         collect_only_spins,
         trigger_count,
+        storage.collector_active_spin_count,
+        storage.collector_symbol_count,
+        storage.collected_coin_cell_count,
+        storage.coin_drop_spin_count,
+        storage.coin_drop_cell_count,
     )
 
 
@@ -470,6 +546,11 @@ def evaluate_base(num_spins: int, seed: int, config=FULL_GAME_CONFIG) -> dict:
         positive_collect_spins,
         collect_only_spins,
         trigger_count,
+        collector_active_spins,
+        collector_symbols,
+        collected_coin_cells,
+        coin_drop_spins,
+        coin_drop_cells,
     ) = _evaluate_base_kernel(initial_reels, config, num_spins, seed)
     targets = load_game_targets()
     return {
@@ -485,7 +566,21 @@ def evaluate_base(num_spins: int, seed: int, config=FULL_GAME_CONFIG) -> dict:
         "line_hit_rate": float(positive_line_spins / num_spins),
         "collect_hit_rate": float(positive_collect_spins / num_spins),
         "collect_only_hit_rate": float(collect_only_spins / num_spins),
+        "collector_active_spin_rate": float(
+            collector_active_spins / num_spins
+        ),
+        "average_collectors_on_active_spin": float(
+            collector_symbols / max(1, collector_active_spins)
+        ),
+        "average_coins_collected_per_collector": float(
+            collected_coin_cells / max(1, collector_symbols)
+        ),
+        "coin_drop_spin_rate": float(coin_drop_spins / num_spins),
+        "average_coin_cells_per_drop": float(
+            coin_drop_cells / max(1, coin_drop_spins)
+        ),
         "target_base_hit_rate": targets["Base hit rate"],
+        "target_base_hit_rate_max": 0.30,
         "trigger_rate": float(trigger_count / num_spins),
         "target_trigger_rate": targets["H&S trigger rate"],
     }
@@ -602,6 +697,7 @@ def evaluate_full_game(
             full_storage.base_positive_spin_count / paid_spins
         ),
         "target_base_hit_rate": targets["Base hit rate"],
+        "target_base_hit_rate_max": 0.30,
         "feature_rtp": float(result[2] / paid_spins),
         "target_feature_rtp": targets["Non-jackpot feature subtotal RTP"],
         "jackpot_rtp": float(result[3] / paid_spins),
@@ -612,6 +708,136 @@ def evaluate_full_game(
         "jackpots": jackpot_rows,
         "feature_respins": int(full_storage.feature_spin_counts.sum()),
         "hold_and_spin_steps": int(hold_and_spin_storage.step_count),
+    }
+
+
+def _summarize_feature_history(storage, rules) -> dict:
+    """Derive mechanic diagnostics from production H&S history arrays."""
+    session_count = int(storage.session_count)
+    bag_resolution_counts = np.zeros(
+        len(rules.bag_symbols), dtype=np.int64
+    )
+    final_coin_total = 0
+    final_visible_total = 0
+    final_backing_visible_total = 0
+    final_coin_value_total = 0.0
+    unlocked_row_total = 0
+    all_rows_unlocked = 0
+    splitter_generated_coins = 0
+    splitter_resolution_count = 0
+    multiplier_affected_coins = 0
+    multiplier_resolution_count = 0
+    booster_affected_coins = 0
+    booster_resolution_count = 0
+    collector_event_count = 0
+
+    for session_index in range(session_count):
+        respin_start = int(
+            storage.session_respin_offsets[session_index]
+        )
+        respin_end = int(
+            storage.session_respin_offsets[session_index + 1]
+        )
+        step_start = int(storage.respin_step_offsets[respin_start])
+        step_end = int(storage.respin_step_offsets[respin_end])
+        final_step = step_end - 1
+        final_locked_row = int(
+            storage.step_locked_row_indices[final_step]
+        )
+        final_mask = storage.coin_masks[final_step]
+        final_board = storage.boards[final_step]
+        active_slice = slice(final_locked_row + 1, rules.num_rows)
+        active_mask = final_mask[active_slice]
+        active_board = final_board[active_slice]
+        final_coin_total += int(np.count_nonzero(active_mask))
+        final_visible_total += int(np.count_nonzero(active_board))
+        final_backing_visible_total += int(np.count_nonzero(final_board))
+        final_coin_value_total += float(active_board[active_mask].sum())
+        unlocked_rows = rules.num_rows - (final_locked_row + 1)
+        unlocked_row_total += unlocked_rows - rules.starting_rows
+        all_rows_unlocked += int(final_locked_row < 0)
+
+        for step_index in range(step_start, step_end):
+            bag_index = int(storage.feature_types[step_index])
+            if bag_index < 0:
+                continue
+            bag_resolution_counts[bag_index] += 1
+            previous_step = max(step_start, step_index - 1)
+            before_mask = storage.coin_masks[previous_step]
+            after_mask = storage.coin_masks[step_index]
+            locked_row = int(storage.step_locked_row_indices[step_index])
+            active = slice(locked_row + 1, rules.num_rows)
+            if bag_index == 0:
+                splitter_resolution_count += 1
+                added = (
+                    int(np.count_nonzero(after_mask[active]))
+                    - int(np.count_nonzero(before_mask[active]))
+                )
+                # The Splitter itself converts into one Coin. Everything
+                # beyond that cell was generated by the split action.
+                splitter_generated_coins += max(0, added - 1)
+            elif bag_index == 2:
+                booster_resolution_count += 1
+                booster_affected_coins += int(
+                    np.count_nonzero(before_mask[active])
+                )
+            elif bag_index == 3:
+                multiplier_resolution_count += 1
+                multiplier_affected_coins += int(
+                    np.count_nonzero(before_mask[active])
+                )
+            elif bag_index == 4:
+                before_meter = (
+                    int(storage.step_collector_meters[previous_step])
+                )
+                after_meter = int(
+                    storage.step_collector_meters[step_index]
+                )
+                collector_event_count += int(after_meter > before_meter)
+
+    final_average_coin_value = (
+        final_coin_value_total / max(1, final_coin_total)
+    )
+    return {
+        "average_final_coins": final_coin_total / max(1, session_count),
+        "average_final_visible_symbols": (
+            final_visible_total / max(1, session_count)
+        ),
+        "average_final_backing_visible_symbols": (
+            final_backing_visible_total / max(1, session_count)
+        ),
+        "average_final_coin_value": final_average_coin_value,
+        "average_rows_unlocked": (
+            unlocked_row_total / max(1, session_count)
+        ),
+        "all_rows_unlocked_rate": (
+            all_rows_unlocked / max(1, session_count)
+        ),
+        "average_bag_resolutions": (
+            bag_resolution_counts / max(1, session_count)
+        ).tolist(),
+        "average_splitter_generated_coins": (
+            splitter_generated_coins / max(1, session_count)
+        ),
+        "average_coins_per_splitter_resolution": (
+            splitter_generated_coins / max(1, splitter_resolution_count)
+        ),
+        "average_multiplier_resolutions": (
+            multiplier_resolution_count / max(1, session_count)
+        ),
+        "average_coins_per_multiplier_resolution": (
+            multiplier_affected_coins
+            / max(1, multiplier_resolution_count)
+        ),
+        "average_booster_resolutions": (
+            booster_resolution_count / max(1, session_count)
+        ),
+        "average_coins_per_booster_resolution": (
+            booster_affected_coins / max(1, booster_resolution_count)
+        ),
+        "average_collector_events": (
+            collector_event_count / max(1, session_count)
+        ),
     }
 
 
@@ -654,6 +880,10 @@ def evaluate_features(
         raw_standard_deviation = float(
             np.std(session_wins, ddof=1)
         ) if num_sessions > 1 else 0.0
+        mechanic_metrics = _summarize_feature_history(
+            storage,
+            config.hold_and_spin,
+        )
         target_mean = target_means[route_index]
         recommended_multiplier = (
             target_mean / raw_mean if raw_mean > 0.0 else 0.0
@@ -676,6 +906,7 @@ def evaluate_features(
                 "average_respins": float(total_respins / num_sessions),
                 "maximum_raw_win": float(maximum_raw_win),
                 "jackpot_award_counts": jackpot_awards.tolist(),
+                **mechanic_metrics,
             }
         )
         del storage
@@ -705,6 +936,19 @@ def _format_base(result: dict) -> str:
     for label, observed_key, target_key in rows:
         observed = result[observed_key]
         target = result[target_key]
+        if label == "Base hit rate":
+            target_max = result["target_base_hit_rate_max"]
+            target_text = f"{target:.0%}-{target_max:.0%}"
+            status = (
+                "in range"
+                if target <= observed <= target_max
+                else "out of range"
+            )
+            lines.append(
+                f"{label:<18} {observed:>11.6%} "
+                f"{target_text:>12} {status:>12}"
+            )
+            continue
         lines.append(
             f"{label:<18} {observed:>11.6%} {target:>11.6%} "
             f"{observed - target:>+11.6%}"
@@ -772,6 +1016,19 @@ def _format_full_game(result: dict) -> str:
     for label, observed_key, target_key in components:
         observed = result[observed_key]
         target = result[target_key]
+        if label == "Base hit rate":
+            target_max = result["target_base_hit_rate_max"]
+            target_text = f"{target:.0%}-{target_max:.0%}"
+            status = (
+                "in range"
+                if target <= observed <= target_max
+                else "out of range"
+            )
+            lines.append(
+                f"{label:<18} {observed:>11.6%} "
+                f"{target_text:>12} {status:>12}"
+            )
+            continue
         lines.append(
             f"{label:<18} {observed:>11.6%} {target:>11.6%} "
             f"{observed - target:>+11.6%}"

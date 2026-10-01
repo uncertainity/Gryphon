@@ -63,15 +63,14 @@ def test_overlay_count_is_limited_by_eligible_positions():
     assert overlay[1, 2] == 0
 
 
-def test_overlay_increments_matching_jackpot_and_stops_at_twice_seed():
+def test_overlay_increments_matching_jackpot_and_stops_at_configured_cap():
     overlay = np.full((3, 5), -1, dtype=np.int8)
     overlay[0, 0] = 2
     overlay[1, 1] = 2
     major = 2
     jackpot_values = JACKPOT_CONFIG.seed_values.copy()
     jackpot_values[major] = (
-        JACKPOT_CONFIG.seed_values[major]
-        * JACKPOT_CONFIG.cap_multiplier
+        JACKPOT_CONFIG.cap_values[major]
         - JACKPOT_CONFIG.increment_values[major] / 2.0
     )
 
@@ -83,7 +82,4 @@ def test_overlay_increments_matching_jackpot_and_stops_at_twice_seed():
 
     assert increment_counts[major] == 2
     assert values_before[major] < jackpot_values[major]
-    assert jackpot_values[major] == (
-        JACKPOT_CONFIG.seed_values[major]
-        * JACKPOT_CONFIG.cap_multiplier
-    )
+    assert jackpot_values[major] == JACKPOT_CONFIG.cap_values[major]

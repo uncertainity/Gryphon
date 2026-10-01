@@ -1,0 +1,24 @@
+{
+  "base": {
+    "spins": 5000000,
+    "seed": 20261001,
+    "base_rtp": 0.5505891118552283,
+    "target_base_rtp": 0.55,
+    "line_rtp": 0.34963845185667497,
+    "target_line_rtp": 0.349,
+    "collect_rtp": 0.20095065999998393,
+    "target_collect_rtp": 0.201,
+    "base_hit_rate": 0.298955,
+    "line_hit_rate": 0.2202692,
+    "collect_hit_rate": 0.0984074,
+    "collect_only_hit_rate": 0.0786858,
+    "collector_active_spin_rate": 0.1092714,
+    "average_collectors_on_active_spin": 1.450696156542334,
+    "average_coins_collected_per_collector": 3.5123252897433503,
+    "coin_drop_spin_rate": 0.1757912,
+    "average_coin_cells_per_drop": 3.899315779174384,
+    "target_base_hit_rate": 0.25,
+    "trigger_rate": 0.0132718,
+    "target_trigger_rate": 0.013333333333333334
+  }
+}

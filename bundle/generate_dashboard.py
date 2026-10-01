@@ -273,7 +273,7 @@ def build_dashboard():
                 name,
                 f"{seed:g}x",
                 f"{float(JACKPOT_CONFIG.increment_values[index]):g}x",
-                f"{seed * JACKPOT_CONFIG.cap_multiplier:g}x",
+                f"{float(JACKPOT_CONFIG.cap_values[index]):g}x",
                 int(HOLD_AND_SPIN_CONFIG.jackpot_collection_targets[index]),
                 _pct(float(HOLD_AND_SPIN_CONFIG.jackpot_type_probabilities[index])),
             )
@@ -285,7 +285,7 @@ def build_dashboard():
         "Copies selected active coin values into empty unlocked cells.",
         "Increases selected active coins by weighted increments.",
         "Adds one weighted boost to every active unlocked coin.",
-        "Multiplies every active unlocked coin by a weighted value.",
+        "Places persistent 2x-4x values on empty active cells for future Coins.",
         "Adds the active coin total to the Collector meter.",
         "Unlocks rows upward from the starting active area.",
     )
@@ -307,28 +307,28 @@ def build_dashboard():
         "Overlay walking Collectors carried from the previous paid spin.",
         "Evaluate paylines, assign visible coin credits, and pay Collectors.",
         "Draw 0-4 jackpot overlays on eligible symbols and increment their progressives.",
-        "If Bag triggers are visible, the full game launches the feature immediately.",
+        "If generic SC triggers are visible, convert them independently to SC1-SC6.",
         "Move active Collectors right and continue paid spins until all have exited.",
     )
     feature_flow = (
-        "Pass every visible trigger Bag from the base result, preserving duplicates and board order.",
-        "Place the starting Bags and credit coins in the initially unlocked rows.",
+        "Choose one visible single-Bag route, or Mega when all six Bags are present.",
+        "Place that one Bag (all six for Mega) and credit coins in the active rows.",
         "Land natural coins or Bags, then resolve Bags in configured order.",
         "Attach jackpot-token overlays only to eligible naturally landed feature coins.",
         "Collect session-local jackpot meters; reaching a target awards that jackpot type.",
-        "The full game pays the current progressive and resets only the awarded jackpot to seed.",
+        "Pay the feature and progressives, reset awarded tiers, and enforce the 15,000x round cap.",
     )
 
     sections = []
     sections.append(_section("sources", "Authoritative sources", "The dashboard is generated from the current engine, not from the retired Gryphon_Lovy snapshot.", _table(("Path", "Role"), source_rows)))
     sections.append(_section("statistics", "Latest simulation results", "The newest compatible NPZ archive for each storage type is selected automatically.", _statistics_section()))
-    sections.append(_section("base", "Base game", "Current paid-game dimensions, reel weights, paylines and credit values.", _cards((("Grid", f"{BASE_GAME_CONFIG.num_reels} × {BASE_GAME_CONFIG.num_rows}", "reels × rows"), ("Paylines", len(PAY_LINES), "left-to-right evaluation"), ("Trigger requirement", BASE_GAME_CONFIG.free_game_trigger_count, "visible Bag symbol"), ("Max Collectors", BASE_GAME_CONFIG.max_active_collectors, "walking instances"))) + '<div class="two-col">' + _table(("Reelset", "Probability"), reel_rows) + _table(("Coin credit", "Probability"), [(int(v), _pct(float(p))) for v, p in zip(BASE_GAME_CONFIG.coin_credit_values, BASE_GAME_CONFIG.coin_credit_value_probabilities)]) + "</div>"))
+    sections.append(_section("base", "Base game", "Current paid-game dimensions, reel weights, paylines and credit values.", _cards((("Grid", f"{BASE_GAME_CONFIG.num_reels} × {BASE_GAME_CONFIG.num_rows}", "reels × rows"), ("Paylines", len(PAY_LINES), "left-to-right evaluation"), ("Trigger requirement", BASE_GAME_CONFIG.free_game_trigger_count, "visible Bag symbol"), ("Max Collectors", BASE_GAME_CONFIG.max_active_collectors, "walking instances"))) + '<div class="two-col">' + _table(("Reelset", "Probability"), reel_rows) + _table(("Coin credit", "Probability"), [(f"{float(v):g}", _pct(float(p))) for v, p in zip(BASE_GAME_CONFIG.coin_credit_values, BASE_GAME_CONFIG.coin_credit_value_probabilities)]) + "</div>"))
     sections.append(_section("base-flow", "Base-game flow", "A round may contain multiple paid spins while walking Collectors remain active.", '<div class="flow">' + "".join(f'<div><b>{i}</b><span>{escape(step)}</span></div>' for i, step in enumerate(base_flow, 1)) + "</div>"))
     sections.append(_section("symbols", "Symbol map", "Numeric IDs and their current runtime roles.", _table(("ID", "Symbol", "Role"), symbol_rows)))
     sections.append(_section("paytable", "Base paytable", "Values are multiples of bet; columns correspond to the stored match-count indices.", _table(("Symbol", "1", "2", "3", "4", "5"), paytable_rows)))
-    sections.append(_section("jackpots", "Progressive jackpots", "Base overlays increment monetary values. Free-game token meters decide which values are awarded.", _cards((("Token chance", _pct(HOLD_AND_SPIN_CONFIG.jackpot_token_probability), "per eligible natural feature coin"), ("Max tokens/respin", HOLD_AND_SPIN_CONFIG.max_jackpot_tokens_per_respin, "configured hard limit"), ("Cap multiplier", f"{JACKPOT_CONFIG.cap_multiplier:g}× seed", "applied independently"), ("Session meters", "Reset", "at each free-game start"))) + _table(("Jackpot", "Seed", "Increment", "Cap", "Tokens to award", "Token type weight"), jackpot_rows) + '<div class="two-col"><div><h3>Base overlay count</h3>' + _bars([(str(c), float(p)) for c, p in zip(BASE_JACKPOT_OVERLAY_CONFIG.count_values, BASE_JACKPOT_OVERLAY_CONFIG.count_probabilities)]) + '</div><div><h3>Overlay count table</h3>' + _table(("Count", "Probability"), overlay_rows) + "</div></div>"))
-    sections.append(_section("feature", "Hold-and-Spin feature", "The feature owns coin awards and session-local jackpot meters; the full game owns monetary jackpot payment.", _cards((("Grid", f"{HOLD_AND_SPIN_CONFIG.num_reels} × {HOLD_AND_SPIN_CONFIG.num_rows}", "reels × rows"), ("Starting rows", HOLD_AND_SPIN_CONFIG.starting_rows, "unlocked"), ("Starting respins", HOLD_AND_SPIN_CONFIG.respin_reset_count, "reset on qualifying natural coin"), ("Max coin", HOLD_AND_SPIN_CONFIG.max_coin_value, "credit cap"))) + _table(("Order", "Symbol", "Bag", "Post-action", "Effect"), bag_rows)))
-    sections.append(_section("feature-flow", "Full-game feature flow", "Trigger Bags are transferred directly from the triggering base window without deduplication.", '<div class="flow">' + "".join(f'<div><b>{i}</b><span>{escape(step)}</span></div>' for i, step in enumerate(feature_flow, 1)) + "</div>"))
+    sections.append(_section("jackpots", "Progressive jackpots", "Base overlays increment monetary values. Free-game token meters decide which values are awarded.", _cards((("Token chance", _pct(HOLD_AND_SPIN_CONFIG.jackpot_token_probability), "per eligible natural feature coin"), ("Max tokens/respin", HOLD_AND_SPIN_CONFIG.max_jackpot_tokens_per_respin, "configured hard limit"), ("Tier caps", "Independent", "configured monetary caps"), ("Session meters", "Reset", "at each free-game start"))) + _table(("Jackpot", "Seed", "Increment", "Cap", "Tokens to award", "Token type weight"), jackpot_rows) + '<div class="two-col"><div><h3>Base overlay count</h3>' + _bars([(str(c), float(p)) for c, p in zip(BASE_JACKPOT_OVERLAY_CONFIG.count_values, BASE_JACKPOT_OVERLAY_CONFIG.count_probabilities)]) + '</div><div><h3>Overlay count table</h3>' + _table(("Count", "Probability"), overlay_rows) + "</div></div>"))
+    sections.append(_section("feature", "Hold-and-Spin feature", "The feature owns coin awards and session-local jackpot meters; the full game owns monetary jackpot payment.", _cards((("Grid", f"{HOLD_AND_SPIN_CONFIG.num_reels} × {HOLD_AND_SPIN_CONFIG.num_rows}", "reels × rows"), ("Starting rows", HOLD_AND_SPIN_CONFIG.starting_rows, "unlocked"), ("Starting respins", HOLD_AND_SPIN_CONFIG.respin_reset_count, "reset on qualifying landed symbols"), ("Max round win", f"{FULL_GAME_CONFIG.max_win:g}x", "base + feature + jackpots"))) + _table(("Order", "Symbol", "Bag", "Post-action", "Effect"), bag_rows)))
+    sections.append(_section("feature-flow", "Full-game feature flow", "Each paid-spin trigger launches exactly one routed Hold-and-Spin session.", '<div class="flow">' + "".join(f'<div><b>{i}</b><span>{escape(step)}</span></div>' for i, step in enumerate(feature_flow, 1)) + "</div>"))
     sections.append(_section("runtime", "Runtime and reporting", "Supported entry points and generated artifacts.", _table(("Command", "Purpose"), (("python -m Numba_Engine.simulations.base_game", "Base simulation and statistics"), ("python -m Numba_Engine.simulations.free_game", "Standalone Hold-and-Spin simulation"), ("python -m Numba_Engine.simulations.full_game", "Integrated base/free/jackpot simulation"), ("python -m Numba_Engine.simulations.per_spin", "Interactive base, feature, and persistent full-game session"), ("./tests/run.sh", "Run 10,000 base, free, and full-game samples"), ("python bundle/generate_dashboard.py", "Regenerate this dashboard")))))
 
     nav = "".join(
