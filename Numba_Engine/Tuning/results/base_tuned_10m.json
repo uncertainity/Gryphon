@@ -1,0 +1,19 @@
+{
+  "base": {
+    "spins": 10000000,
+    "seed": 20261006,
+    "base_rtp": 0.5523606604368183,
+    "target_base_rtp": 0.5517462399913647,
+    "line_rtp": 0.35131423043931415,
+    "target_line_rtp": 0.35119557999142814,
+    "collect_rtp": 0.20104642999992253,
+    "target_collect_rtp": 0.20055065999993657,
+    "base_hit_rate": 0.2376356,
+    "line_hit_rate": 0.2197754,
+    "collect_hit_rate": 0.0222493,
+    "collect_only_hit_rate": 0.0178602,
+    "target_base_hit_rate": 0.23758546,
+    "trigger_rate": 0.0100115,
+    "target_trigger_rate": 0.01
+  }
+}

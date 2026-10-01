@@ -110,3 +110,35 @@ def test_hold_and_spin_statistics_report_jackpot_collections(
     report = format_hold_and_spin_statistics(statistics)
     assert "JACKPOT COLLECTIONS BY TYPE" in report
     assert "Mini" in report
+
+
+def test_plain_route_uses_three_by_five_payload_and_zero_starting_bags(
+    tmp_path,
+    monkeypatch,
+):
+    config = HOLD_AND_SPIN_CONFIG._replace(
+        p_coin_locked=0.0,
+        p_coin_unlocked=0.0,
+        starting_coin_counts=np.array([1], dtype=np.int8),
+        starting_coin_count_probabilities=np.array([1.0]),
+    )
+    storage = _storage(config)
+
+    hold_and_spin(np.empty(0, dtype=np.int16), config, storage)
+
+    payload = storage_to_dict(storage)
+    session = payload["sessions"][0]
+    assert session["feature_route"] == "Plain"
+    assert session["logical_board_shape"] == [3, 5]
+    assert session["starting_symbols"] == []
+    assert len(session["respins"][0]["steps"][0]["board"]) == 3
+    assert session["respins"][0]["steps"][0]["locked_row_index"] == -1
+
+    monkeypatch.setattr(storage_module, "NPZ_LIBRARY_DIR", tmp_path)
+    output_path = storage_module.write_hold_and_spin_npz(
+        storage,
+        "plain_hold_and_spin.npz",
+    )
+    statistics = store_hold_and_spin(output_path, print_result=False)
+    assert statistics.session_count == 1
+    assert statistics.average_starting_symbols == 0.0

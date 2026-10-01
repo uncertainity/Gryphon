@@ -1,0 +1,104 @@
+{
+  "routing": {
+    "spins": 2000000,
+    "seed": 20261001,
+    "trigger_count": 20067,
+    "trigger_rate": 0.0100335,
+    "target_trigger_rate": 0.01,
+    "routes": [
+      {
+        "route": "Splitter",
+        "count": 2778,
+        "rate": 0.001389,
+        "target_rate": 0.001392,
+        "delta": -2.9999999999999645e-06
+      },
+      {
+        "route": "Grow",
+        "count": 2841,
+        "rate": 0.0014205,
+        "target_rate": 0.001392,
+        "delta": 2.8500000000000096e-05
+      },
+      {
+        "route": "Boost",
+        "count": 2832,
+        "rate": 0.001416,
+        "target_rate": 0.001392,
+        "delta": 2.3999999999999933e-05
+      },
+      {
+        "route": "Multiplier",
+        "count": 2807,
+        "rate": 0.0014035,
+        "target_rate": 0.001392,
+        "delta": 1.1500000000000008e-05
+      },
+      {
+        "route": "Collect",
+        "count": 2788,
+        "rate": 0.001394,
+        "target_rate": 0.001392,
+        "delta": 2.0000000000000486e-06
+      },
+      {
+        "route": "Expansion",
+        "count": 2757,
+        "rate": 0.0013785,
+        "target_rate": 0.001392,
+        "delta": -1.3500000000000057e-05
+      },
+      {
+        "route": "Mega Combo",
+        "count": 781,
+        "rate": 0.0003905,
+        "target_rate": 0.0004,
+        "delta": -9.500000000000014e-06
+      },
+      {
+        "route": "Plain",
+        "count": 2483,
+        "rate": 0.0012415,
+        "target_rate": 0.001248,
+        "delta": -6.499999999999995e-06
+      }
+    ],
+    "reelset_counts": [
+      94733,
+      1903452,
+      1815
+    ],
+    "trigger_counts_by_reelset": [
+      1077,
+      17175,
+      1815
+    ],
+    "sc_count_histogram": [
+      0,
+      18168,
+      84,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1815,
+      0,
+      0,
+      0
+    ],
+    "distinct_bag_histogram": [
+      0,
+      18186,
+      66,
+      4,
+      178,
+      852,
+      781
+    ]
+  }
+}

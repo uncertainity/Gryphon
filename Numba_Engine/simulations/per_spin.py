@@ -17,7 +17,11 @@ from ..serialization.json_output import (
     write_json_payload,
 )
 from .base_game import run_one_spin as _run_one_base_spin
-from .free_game import hold_and_free_spin, select_starting_bag_symbols
+from .free_game import (
+    hold_and_free_spin,
+    select_starting_bag_symbols,
+    validate_hold_and_spin_config,
+)
 from .full_game import _new_storages, run_one_full_round
 
 
@@ -71,6 +75,7 @@ def run_hold_and_spin(
 ):
     """Run one Hold-and-Spin session with supplied or randomized features."""
     rules = HOLD_AND_SPIN_CONFIG
+    validate_hold_and_spin_config(rules)
     if starting_bag_symbols is None:
         starting_bag_symbols = select_starting_bag_symbols(rules)
     else:
@@ -115,7 +120,9 @@ def run_full_game(
         config.base_game.reelset_path,
         config.base_game,
     )
-    base_storage, full_storage = _new_storages(1, config)
+    base_storage, hold_and_spin_storage, full_storage = _new_storages(
+        1, config
+    )
     if jackpot_values is None:
         jackpot_values = config.jackpots.seed_values.copy()
     else:
@@ -128,9 +135,14 @@ def run_full_game(
         config,
         jackpot_values,
         base_storage,
+        hold_and_spin_storage,
         full_storage,
     )
-    payload = full_game_storage_to_dict(full_storage, base_storage)
+    payload = full_game_storage_to_dict(
+        full_storage,
+        base_storage,
+        hold_and_spin_storage,
+    )
     if print_result:
         pretty_print(payload, empty_marker="**")
 
@@ -144,6 +156,7 @@ def run_full_game(
     return (
         result,
         base_storage,
+        hold_and_spin_storage,
         full_storage,
         jackpot_values,
         payload,
@@ -184,6 +197,7 @@ def play_full_game_session(input_function=input):
             flush=True,
         )
         (
+            _,
             _,
             _,
             _,

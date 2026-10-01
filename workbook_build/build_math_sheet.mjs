@@ -7,25 +7,25 @@ const previewPath = `${outputDir}/Gryphon_math_sheet_summary.png`;
 const font = "Arial";
 
 const tuning = {
-  targetTotalRtp: 0.94,
+  targetTotalRtp: 0.9402008490918528,
   baseLineRtp: 0.35119557999142814,
   baseCollectRtp: 0.20055065999993657,
   baseRtp: 0.5517462399913647,
-  targetFeatureRtp: 0.3882537600086353,
-  featureRtp: 0.388454609100488,
+  featureRtp: 0.3754137165425921,
+  jackpotRtp: 0.013040892557895896,
   totalRtp: 0.9402008490918528,
-  featurePayoutMultiplier: 1.086911,
-  sessionsPerFeature: 5000,
+  sessionsPerFeature: 50000,
 };
 
 const featureMeans = {
-  Splitter: 30.63721685962,
-  Grow: 35.974232466480004,
-  Boost: 25.66362081472,
-  Multiplier: 29.41196382754,
-  Collect: 45.901338441,
-  Expansion: 53.2354877957,
-  "Mega/Combo": 87.84108193098,
+  Plain: 35.56842254698634,
+  Splitter: 29.608688316054934,
+  Grow: 34.7665338333386,
+  Boost: 24.80206192508209,
+  Multiplier: 28.424568514919448,
+  Collect: 44.36037481526567,
+  Expansion: 51.4483078772573,
+  "Mega/Combo": 84.89215022880804,
 };
 
 const basePaytable = [
@@ -44,16 +44,16 @@ const basePaytable = [
 ];
 
 const baseCoinValues = [
-  [0.2, 0.030],
-  [0.3, 0.040],
-  [0.5, 0.070],
-  [0.8, 0.100],
-  [0.9, 0.100],
-  [1.0, 0.150],
-  [1.2, 0.170],
-  [1.5, 0.170],
-  [2.0, 0.120],
-  [2.5, 0.050],
+  [0.2, 0.014581425011130],
+  [0.3, 0.020756800175620],
+  [0.5, 0.041403957230101],
+  [0.8, 0.071979513760192],
+  [0.9, 0.076847652889799],
+  [1.0, 0.123067553102945],
+  [1.2, 0.158980781060996],
+  [1.5, 0.193468259037971],
+  [2.0, 0.189430778346341],
+  [2.5, 0.109483279384903],
 ];
 
 const featureCoinValues = [
@@ -94,13 +94,12 @@ const comboBoostValues = [
 ];
 
 const scatterConversion = [
-  ["SC1 Splitter", 0.145],
-  ["SC2 Grower", 0.145],
-  ["SC3 Booster", 0.145],
-  ["SC4 Multiplier", 0.145],
-  ["SC5 Collector", 0.145],
-  ["SC6 Expansion", 0.145],
-  ["SC7 Combo marker", 0.130],
+  ["SC1 Splitter", 1 / 6],
+  ["SC2 Grower", 1 / 6],
+  ["SC3 Booster", 1 / 6],
+  ["SC4 Multiplier", 1 / 6],
+  ["SC5 Collector", 1 / 6],
+  ["SC6 Expansion", 1 / 6],
 ];
 
 const landingTables = [
@@ -191,21 +190,19 @@ setupSheet(summary, [22, 18, 22, 50]);
 summary.tabColor = "#1F4E78";
 title(summary, "Gryphon RTP tuning summary");
 table(summary, "A4", ["Metric", "Value", "Note"], [
-  ["Target total RTP", tuning.targetTotalRtp, "User target"],
-  ["Locked base RTP", tuning.baseRtp, "Base line + Collect. Base settings unchanged."],
-  ["Target feature RTP", tuning.targetFeatureRtp, "Target total less locked base"],
-  ["Tuned feature RTP", tuning.featureRtp, "5,000 sessions per feature lane"],
-  ["Tuned total RTP", tuning.totalRtp, "Locked base plus tuned feature layer"],
-  ["Feature payout multiplier", tuning.featurePayoutMultiplier, "Applied to final feature win only"],
+  ["Target total RTP", tuning.targetTotalRtp, "Paid-spin denominator"],
+  ["Target base RTP", tuning.baseRtp, "Base line + Collect"],
+  ["Target non-jackpot feature RTP", tuning.featureRtp, "Eight routed H&S lanes"],
+  ["Target jackpot RTP", tuning.jackpotRtp, "Mini + Minor + Major + Grand"],
+  ["Target allocation total", tuning.totalRtp, "Base + H&S + jackpots"],
   ["Overall feature odds", 0.01, "1 in 100"],
   ["Combo feature odds", 0.0004, "1 in 2,500"],
+  ["Plain feature odds", 0.001248, "1 in 801.28"],
 ], "Summary");
-summary.getRange("B5:B9").format.numberFormat = "0.0000%";
-summary.getRange("B10").format.numberFormat = "0.000000";
-summary.getRange("B11:B12").format.numberFormat = "0.0000%";
+summary.getRange("B5:B12").format.numberFormat = "0.0000%";
 sectionLabel(summary, "A16", "Important odds note");
 summary.getRange("A17:D18").merge();
-summary.getRange("A17").values = [["Six single features at exactly 1 in 600 already sum to 1 in 100. Adding combo at 1 in 2,500 would make total odds 1 in 96.15. This tuning preserves total 1 in 100 and combo 1 in 2,500 by using single-feature lanes at 1 in 625 each."]];
+summary.getRange("A17").values = [["Exactly one route runs per trigger: Mega is 0.04% of paid spins; the non-Mega allocation is 13% Plain and 87% split equally across the six single-Bag routes."]];
 summary.getRange("A17").format.wrapText = true;
 summary.getRange("A17").format.fill = "#FFF2CC";
 
@@ -216,42 +213,56 @@ title(rtp, "RTP build and feature odds");
 table(rtp, "A4", ["Lane", "Requested odds", "Implemented odds", "Mean win", "RTP contribution", "Notes"], [
   ["Base line", "", 1, tuning.baseLineRtp, "", "Locked from 10M base validation"],
   ["Base Collect", "", 1, tuning.baseCollectRtp, "", "Locked from 10M base validation"],
-  ["Splitter", 1 / 600, 1 / 625, featureMeans.Splitter, "", "Single feature lane"],
-  ["Grow", 1 / 600, 1 / 625, featureMeans.Grow, "", "Single feature lane"],
-  ["Boost", 1 / 600, 1 / 625, featureMeans.Boost, "", "Single feature lane"],
-  ["Multiplier", 1 / 600, 1 / 625, featureMeans.Multiplier, "", "Single feature lane"],
-  ["Collect", 1 / 600, 1 / 625, featureMeans.Collect, "", "Single feature lane"],
-  ["Expansion", 1 / 600, 1 / 625, featureMeans.Expansion, "", "Single feature lane"],
-  ["Mega/Combo", 1 / 2500, 1 / 2500, featureMeans["Mega/Combo"], "", "Combo lane"],
+  ["Plain H&S", 0.001248, 0.001248, featureMeans.Plain, "", "No-Bag route"],
+  ["Splitter", 0.001392, 0.001392, featureMeans.Splitter, "", "SC1 route"],
+  ["Grow", 0.001392, 0.001392, featureMeans.Grow, "", "SC2 route"],
+  ["Boost", 0.001392, 0.001392, featureMeans.Boost, "", "SC3 route"],
+  ["Multiplier", 0.001392, 0.001392, featureMeans.Multiplier, "", "SC4 route"],
+  ["Collect", 0.001392, 0.001392, featureMeans.Collect, "", "SC5 route"],
+  ["Expansion", 0.001392, 0.001392, featureMeans.Expansion, "", "SC6 route"],
+  ["Mega/Combo", 0.0004, 0.0004, featureMeans["Mega/Combo"], "", "All-six route"],
+  ["Mini jackpot", "", "", 0.00703751533863107, "", "Direct RTP target"],
+  ["Minor jackpot", "", "", 0.00354982155325179, "", "Direct RTP target"],
+  ["Major jackpot", "", "", 0.001852213908028074, "", "Direct RTP target"],
+  ["Grand jackpot", "", "", 0.0006013417579849628, "", "Direct RTP target"],
   ["Total", "", "", "", "", "Formula total"],
 ], "RTPBuild");
 rtp.getRange("E5").formulas = [["=D5"]];
 rtp.getRange("E6").formulas = [["=D6"]];
 rtp.getRange("E7").formulas = [["=C7*D7"]];
-rtp.getRange("E7:E13").fillDown();
-rtp.getRange("E14").formulas = [["=SUM(E5:E13)"]];
-rtp.getRange("B7:C13").format.numberFormat = "0.0000%";
-rtp.getRange("D5:E14").format.numberFormat = "0.0000%";
-rtp.getRange("D7:D13").format.numberFormat = "0.0000";
-sectionLabel(rtp, "A17", "Control values");
-table(rtp, "A18", ["Control", "Value", "Meaning"], [
+rtp.getRange("E7:E14").fillDown();
+rtp.getRange("E15").formulas = [["=D15"]];
+rtp.getRange("E15:E18").fillDown();
+rtp.getRange("E19").formulas = [["=SUM(E5:E18)"]];
+rtp.getRange("B7:C14").format.numberFormat = "0.0000%";
+rtp.getRange("D5:E19").format.numberFormat = "0.0000%";
+rtp.getRange("D7:D14").format.numberFormat = "0.0000";
+sectionLabel(rtp, "A22", "Control values");
+table(rtp, "A23", ["Control", "Value", "Meaning"], [
   ["Target total RTP", tuning.targetTotalRtp, "Requested"],
-  ["Feature payout multiplier", tuning.featurePayoutMultiplier, "Applied to all feature final wins"],
+  ["Route multipliers", "Configured per route", "Never applied to jackpots"],
   ["Validation sessions per feature", tuning.sessionsPerFeature, "Feature-only sample size"],
 ], "Controls");
-rtp.getRange("B19").format.numberFormat = "0.0000%";
-rtp.getRange("B20").format.numberFormat = "0.000000";
-rtp.getRange("B21").format.numberFormat = "#,##0";
+rtp.getRange("B24").format.numberFormat = "0.0000%";
+rtp.getRange("B26").format.numberFormat = "#,##0";
 
 const odds = workbook.worksheets.add("Odds");
 setupSheet(odds, [28, 20, 20, 52]);
 odds.tabColor = "#70AD47";
-title(odds, "Feature odds reconciliation");
-table(odds, "A4", ["Scenario", "Single lane odds", "Combo odds", "Total feature odds", "Result"], [
-  ["Requested singles plus combo", 1 / 600, 1 / 2500, 6 / 600 + 1 / 2500, "Total becomes 1 in 96.15"],
-  ["Implemented tuning", 1 / 625, 1 / 2500, 6 / 625 + 1 / 2500, "Total remains 1 in 100"],
+title(odds, "Feature route targets");
+table(odds, "A4", ["Route", "Paid-spin probability", "Conditional mean", "RTP contribution"], [
+  ["Plain", 0.001248, featureMeans.Plain, 0.044389391338638953],
+  ["Splitter", 0.001392, featureMeans.Splitter, 0.041215294135948469],
+  ["Grow", 0.001392, featureMeans.Grow, 0.048395015096007331],
+  ["Boost", 0.001392, featureMeans.Boost, 0.034524470199714269],
+  ["Multiplier", 0.001392, featureMeans.Multiplier, 0.039566999372767872],
+  ["Collect", 0.001392, featureMeans.Collect, 0.061749641742849815],
+  ["Expansion", 0.001392, featureMeans.Expansion, 0.071616044565142157],
+  ["Mega Combo", 0.0004, featureMeans["Mega/Combo"], 0.033956860091523218],
 ], "Odds");
-odds.getRange("B5:D6").format.numberFormat = "0.0000%";
+odds.getRange("B5:B12").format.numberFormat = "0.0000%";
+odds.getRange("C5:C12").format.numberFormat = "0.0000";
+odds.getRange("D5:D12").format.numberFormat = "0.0000%";
 
 const base = workbook.worksheets.add("Base Arrays");
 setupSheet(base, [16, 14, 14, 14, 14, 28, 16, 16, 16]);
@@ -306,16 +317,16 @@ setupSheet(rules, [26, 100]);
 rules.tabColor = "#FFC000";
 title(rules, "Game rules");
 table(rules, "A4", ["Area", "Rule"], [
-  ["Base", "Base game settings, reelsets, paytable, Collect mechanic, and coin-drop settings remain unchanged."],
-  ["Feature odds", "Overall feature odds are kept at 1 in 100 in the implemented tuning."],
-  ["Single features", "Six single-feature lanes are tuned at 1 in 625 each to preserve the total feature odds with combo included."],
-  ["Requested odds note", "Exact 1 in 600 for all six singles plus 1 in 2,500 combo cannot also equal overall 1 in 100."],
-  ["Combo", "Mega/Combo triggers only when SC1-SC6 are all present after base SC conversion."],
+  ["Base", "Three configured reelsets use the normal Numba reel selection and 3x5 base-board path."],
+  ["Feature odds", "Overall Hold-and-Spin odds are 1 in 100 paid spins."],
+  ["Single features", "Each of the six single-Bag routes targets 0.1392% of paid spins."],
+  ["Plain", "Plain Hold-and-Spin targets 0.1248% and starts without a Bag."],
+  ["Combo", "Mega/Combo targets 0.04% and requires SC1-SC6 after base SC conversion."],
   ["Jackpots", "Mini, Minor, Major, and Grand require 3 matching tokens. Tokens are not affected by feature symbols."],
   ["Feature ending", "Feature sessions end when the grid is full or spins are exhausted."],
   ["Multiplier", "Multiplier cells affect coins only, not jackpot tokens."],
   ["Splitter", "Splitter cells hold 2 or 3 coin values and are not split again."],
-  ["RTP tuning", "Feature payout multiplier of 1.086911x is applied to final feature wins only."],
+  ["RTP tuning", "Each route has its own configured payout multiplier; progressive jackpots are never multiplied."],
 ], "Rules");
 rules.getRange("B5:B14").format.wrapText = true;
 
@@ -325,16 +336,16 @@ flow.tabColor = "#ED7D31";
 title(flow, "Game flow");
 table(flow, "A4", ["Flow", "Step"], [
   ["Base", "Select reelset, draw 5x3 window, evaluate lines, drop overlay coins, and resolve Collect awards."],
-  ["Base trigger", "If generic SC appears, convert it to SC1-SC7 by weights for feature routing."],
-  ["Feature launch", "Use the odds table for feature selection. Combo requires SC1-SC6 and uses 1 in 2,500 odds."],
-  ["Common feature start", "Trigger symbol enters active area. Add three normal coins for single features or 1/2/3 extra coins for combo."],
+  ["Base trigger", "If generic SC appears, convert it to one of SC1-SC6 by weights."],
+  ["Feature launch", "Select exactly one eligible route: Plain or one visible Bag; all six distinct Bags launch Mega."],
+  ["Common feature start", "Start one shared Hold-and-Spin session with configured starting Coins and the selected route's Bag set."],
   ["Expansion", "6x5 grid with top 3 rows locked. GO unlocks next locked row and spins out."],
   ["Multiplier", "3x5 grid. Multiplier cells persist until a coin lands on them."],
   ["Grow", "Growers can independently grow 3-5 other normal coins on weighted checks."],
   ["Boost", "Boost spin increases normal coin values and converts booster to a normal coin."],
   ["Collect", "Collectors collect other normal coins, ignore jackpot tokens, and convert to normal coins."],
   ["Splitter", "Splitter cells hold 2 or 3 coin values. Minimum splitter rule is enforced."],
-  ["Mega/Combo", "SC1-SC6 keep exact base positions in the bottom three rows, perform guaranteed opening actions, then continue as a combined 6x5 feature."],
+  ["Mega/Combo", "Start with SC1-SC6 on one 6x5-capable board; top three rows begin locked and Expansion can unlock them."],
 ], "Flow");
 flow.getRange("B5:B15").format.wrapText = true;
 
@@ -356,7 +367,7 @@ await fs.writeFile(previewPath, new Uint8Array(await preview.arrayBuffer()));
 const inspect = await workbook.inspect({
   kind: "table",
   sheetId: "RTP Build",
-  range: "A4:F14",
+  range: "A4:F19",
   include: "values,formulas",
   tableMaxRows: 20,
   tableMaxCols: 8,

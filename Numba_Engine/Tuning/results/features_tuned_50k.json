@@ -1,0 +1,160 @@
+{
+  "features": {
+    "sessions_per_route": 50000,
+    "seed": 20261007,
+    "routes": [
+      {
+        "route": "Splitter",
+        "sessions": 50000,
+        "raw_mean": 15.47356,
+        "raw_standard_deviation": 9.681771307994897,
+        "raw_standard_error": 0.043298197574567286,
+        "current_multiplier": 1.923051683,
+        "current_scaled_mean": 29.75645560000148,
+        "target_mean": 29.608688316054934,
+        "recommended_multiplier": 1.913502019965343,
+        "average_respins": 6.57196,
+        "maximum_raw_win": 101.0,
+        "jackpot_award_counts": [
+          9688,
+          699,
+          39,
+          0
+        ]
+      },
+      {
+        "route": "Grow",
+        "sessions": 50000,
+        "raw_mean": 25.96274,
+        "raw_standard_deviation": 17.07424089927414,
+        "raw_standard_error": 0.07635832662996823,
+        "current_multiplier": 1.331275802,
+        "current_scaled_mean": 34.56356751561748,
+        "target_mean": 34.7665338333386,
+        "recommended_multiplier": 1.3390934020576641,
+        "average_respins": 7.2201,
+        "maximum_raw_win": 193.0,
+        "jackpot_award_counts": [
+          12409,
+          1151,
+          65,
+          0
+        ]
+      },
+      {
+        "route": "Boost",
+        "sessions": 50000,
+        "raw_mean": 15.88914,
+        "raw_standard_deviation": 11.043041656888773,
+        "raw_standard_error": 0.049385983646330414,
+        "current_multiplier": 1.558106375,
+        "current_scaled_mean": 24.7569703272675,
+        "target_mean": 24.80206192508209,
+        "recommended_multiplier": 1.560944262879054,
+        "average_respins": 7.68788,
+        "maximum_raw_win": 141.0,
+        "jackpot_award_counts": [
+          14725,
+          1598,
+          82,
+          1
+        ]
+      },
+      {
+        "route": "Multiplier",
+        "sessions": 50000,
+        "raw_mean": 18.86678,
+        "raw_standard_deviation": 15.02502271072324,
+        "raw_standard_error": 0.06719394428931065,
+        "current_multiplier": 1.50624863,
+        "current_scaled_mean": 28.418061527511398,
+        "target_mean": 28.424568514919446,
+        "recommended_multiplier": 1.50659352125373,
+        "average_respins": 7.6545,
+        "maximum_raw_win": 305.0,
+        "jackpot_award_counts": [
+          14663,
+          1537,
+          88,
+          0
+        ]
+      },
+      {
+        "route": "Collect",
+        "sessions": 50000,
+        "raw_mean": 16.57598,
+        "raw_standard_deviation": 11.403662039439707,
+        "raw_standard_error": 0.05099872702524215,
+        "current_multiplier": 2.679141934,
+        "current_scaled_mean": 44.409403115145324,
+        "target_mean": 44.36037481526567,
+        "recommended_multiplier": 2.6761841420697703,
+        "average_respins": 7.7362,
+        "maximum_raw_win": 107.0,
+        "jackpot_award_counts": [
+          14981,
+          1573,
+          79,
+          0
+        ]
+      },
+      {
+        "route": "Expansion",
+        "sessions": 50000,
+        "raw_mean": 19.19146,
+        "raw_standard_deviation": 11.933109026997993,
+        "raw_standard_error": 0.053366485934567776,
+        "current_multiplier": 2.689860064,
+        "current_scaled_mean": 51.62234182385344,
+        "target_mean": 51.44830787725729,
+        "recommended_multiplier": 2.680791762443154,
+        "average_respins": 9.73072,
+        "maximum_raw_win": 95.0,
+        "jackpot_award_counts": [
+          23647,
+          3857,
+          219,
+          1
+        ]
+      },
+      {
+        "route": "Mega Combo",
+        "sessions": 50000,
+        "raw_mean": 140.58052,
+        "raw_standard_deviation": 81.4390975088849,
+        "raw_standard_error": 0.36420671611220085,
+        "current_multiplier": 0.600905123,
+        "current_scaled_mean": 84.47555466200396,
+        "target_mean": 84.89215022880803,
+        "recommended_multiplier": 0.6038685176922666,
+        "average_respins": 7.76982,
+        "maximum_raw_win": 2607.0,
+        "jackpot_award_counts": [
+          14022,
+          1514,
+          71,
+          0
+        ]
+      },
+      {
+        "route": "Plain",
+        "sessions": 50000,
+        "raw_mean": 11.29292,
+        "raw_standard_deviation": 8.014234987373944,
+        "raw_standard_error": 0.03584074843885062,
+        "current_multiplier": 3.155013434,
+        "current_scaled_mean": 35.62931430908728,
+        "target_mean": 35.56842254698634,
+        "recommended_multiplier": 3.149621404117477,
+        "average_respins": 7.89164,
+        "maximum_raw_win": 65.0,
+        "jackpot_award_counts": [
+          17174,
+          2072,
+          114,
+          0
+        ]
+      }
+    ]
+  }
+}

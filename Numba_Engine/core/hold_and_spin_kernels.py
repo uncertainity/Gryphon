@@ -240,21 +240,15 @@ def collect_active_coin_positions(coin_mask, locked_row_idx, num_reels):
 
 
 @njit
-def _select_unawarded_jackpot_type(type_probabilities, awarded_jackpots):
-    """Select a weighted jackpot type, excluding already-awarded types."""
-    available_weight = 0.0
-    for jackpot_type in range(len(type_probabilities)):
-        if not awarded_jackpots[jackpot_type]:
-            available_weight += type_probabilities[jackpot_type]
-
-    if available_weight <= 0.0:
+def _select_jackpot_type(type_probabilities):
+    """Select from the configured type weights without redistributing them."""
+    total_weight = np.sum(type_probabilities)
+    if total_weight <= 0.0:
         return -1
 
-    choice = np.random.uniform(0.0, available_weight)
+    choice = np.random.uniform(0.0, total_weight)
     cumulative_weight = 0.0
     for jackpot_type in range(len(type_probabilities)):
-        if awarded_jackpots[jackpot_type]:
-            continue
         cumulative_weight += type_probabilities[jackpot_type]
         if choice < cumulative_weight:
             return jackpot_type
@@ -296,12 +290,14 @@ def collect_free_game_jackpot_tokens(
         if np.random.uniform(0.0, 1.0) >= rules.jackpot_token_probability:
             continue
 
-        jackpot_type = _select_unawarded_jackpot_type(
-            rules.jackpot_type_probabilities,
-            awarded_jackpots,
-        )
+        jackpot_type = _select_jackpot_type(rules.jackpot_type_probabilities)
         if jackpot_type < 0:
             break
+        # A type can award only once per session.  Retaining its probability
+        # mass prevents a common Mini from being redistributed into the rare
+        # Major and Grand types after the Mini has already awarded.
+        if awarded_jackpots[jackpot_type]:
+            continue
 
         row = position // num_reels
         col = position % num_reels
@@ -385,15 +381,142 @@ class HoldAndSpinResult(NamedTuple):
 
 
 @njit
+def count_occupied_cells(pay_window):
+    """Count persistent symbols across the fixed storage envelope."""
+    occupied_count = 0
+    for row in range(pay_window.shape[0]):
+        for col in range(pay_window.shape[1]):
+            if pay_window[row, col] != 0:
+                occupied_count += 1
+    return occupied_count
+
+
+@njit
+def active_coin_win(pay_window, coin_mask, locked_row_idx):
+    """Sum persistent credit coins only in rows unlocked at session end."""
+    num_reels = pay_window.shape[1]
+    flattened_window = pay_window.ravel()
+    coin_win = 0
+    for position in range(len(coin_mask)):
+        if coin_mask[position] and position // num_reels > locked_row_idx:
+            coin_win += flattened_window[position]
+    return coin_win
+
+
+@njit
+def landing_probability_for_occupied_count(
+    fallback_probability,
+    probabilities_by_occupied_count,
+    occupied_count,
+):
+    """Select a state probability, falling back when the entry is disabled."""
+    if occupied_count < len(probabilities_by_occupied_count):
+        state_probability = probabilities_by_occupied_count[occupied_count]
+        if state_probability >= 0.0:
+            return state_probability
+    return fallback_probability
+
+
+@njit
+def feature_index_for_starting_bags(starting_bag_symbols, bag_symbols):
+    """Return one single-Bag, Mega, or plain route index.
+
+    Bag indices ``0`` through ``5`` are single-feature routes, index ``6`` is
+    Mega Combo, and index ``7`` is the plain Hold-and-Spin route.  A partial
+    multi-Bag list is invalid: production routing must select one Bag before
+    entering this kernel.
+    """
+    if len(starting_bag_symbols) == 0:
+        return len(bag_symbols) + 1
+
+    seen = np.zeros(len(bag_symbols), dtype=np.bool_)
+    distinct_count = 0
+    first_index = -1
+    for symbol in starting_bag_symbols:
+        bag_index = -1
+        for candidate_index in range(len(bag_symbols)):
+            if symbol == bag_symbols[candidate_index]:
+                bag_index = candidate_index
+                break
+        if bag_index < 0:
+            raise ValueError("Unknown starting Bag symbol")
+        if first_index < 0:
+            first_index = bag_index
+        if not seen[bag_index]:
+            seen[bag_index] = True
+            distinct_count += 1
+
+    if distinct_count == 1:
+        return first_index
+    if distinct_count == len(bag_symbols):
+        return len(bag_symbols)
+    raise ValueError(
+        "Hold-and-Spin requires plain, one Bag, or all six Mega Bags"
+    )
+
+
+@njit
+def select_coin_type_for_feature(
+    probabilities,
+    coin_types,
+    feature_index,
+    num_bag_types,
+):
+    """Choose a natural Coin or a Bag enabled by the selected route."""
+    total_weight = 0.0
+    for coin_type_index in range(len(coin_types)):
+        enabled = coin_type_index == 0
+        if feature_index == num_bag_types:
+            enabled = True
+        elif (
+            feature_index >= 0
+            and feature_index < num_bag_types
+            and coin_type_index == feature_index + 1
+        ):
+            enabled = True
+        if enabled:
+            total_weight += probabilities[coin_type_index]
+
+    # A malformed/tuning-only table must not introduce a disabled Bag.  Fall
+    # back to the natural Coin so the route contract remains intact.
+    if total_weight <= 0.0:
+        return coin_types[0]
+
+    choice = np.random.uniform(0.0, total_weight)
+    cumulative_weight = 0.0
+    for coin_type_index in range(len(coin_types)):
+        enabled = coin_type_index == 0
+        if feature_index == num_bag_types:
+            enabled = True
+        elif (
+            feature_index >= 0
+            and feature_index < num_bag_types
+            and coin_type_index == feature_index + 1
+        ):
+            enabled = True
+        if not enabled:
+            continue
+        cumulative_weight += probabilities[coin_type_index]
+        if choice < cumulative_weight:
+            return coin_types[coin_type_index]
+    return coin_types[0]
+
+
+@njit
 def hold_and_spin(
     starting_bag_symbols,
     rules,
     storage,
 ):
-    """Run a Hold-and-Spin round and resolve all active Bags in order."""
+    """Run one routed Hold-and-Spin session in a fixed 6x5 envelope."""
     num_rows = rules.num_rows
     num_reels = rules.num_reels
     max_positions = num_rows * num_reels
+    feature_index = feature_index_for_starting_bags(
+        starting_bag_symbols,
+        rules.bag_symbols,
+    )
+    expansion_enabled = feature_index == 5 or feature_index == 6
     locked_row_idx = num_rows - rules.starting_rows - 1
     pay_window = np.zeros((num_rows, num_reels), dtype=np.int16)
     coin_mask = np.zeros(max_positions, dtype=np.bool_)
@@ -457,24 +580,65 @@ def hold_and_spin(
                 collector_meter,
             )
 
-        # This is an event list, separate from the persistent coin mask.  It
-        # is used only to decide whether this respin resets after Expansion.
+        # These event lists are separate from persistent board state.  The
+        # final locked-row boundary decides which landed symbols qualify.
         landed_coin_positions = np.empty(max_positions, dtype=np.int32)
         num_landed_coins = 0
+        landed_reset_positions = np.empty(max_positions, dtype=np.int32)
+        num_landed_reset_symbols = 0
+        occupied_count = count_occupied_cells(pay_window)
 
-        for row in range(num_rows):
+        first_landing_row = 0 if expansion_enabled else locked_row_idx + 1
+        for row in range(first_landing_row, num_rows):
             for col in range(num_reels):
                 if pay_window[row, col] == 0:
-                    coin_probability = rules.p_coin_locked
+                    coin_probability = landing_probability_for_occupied_count(
+                        rules.p_coin_locked,
+                        rules.p_coin_locked_by_occupied_count,
+                        occupied_count,
+                    )
                     if row > locked_row_idx:
-                        coin_probability = rules.p_coin_unlocked
+                        coin_probability = (
+                            landing_probability_for_occupied_count(
+                                rules.p_coin_unlocked,
+                                rules.p_coin_unlocked_by_occupied_count,
+                                occupied_count,
+                            )
+                        )
 
                     if np.random.uniform(0.0, 1.0) < coin_probability:
-                        coin_type = probChoice(
-                            rules.coin_type_probabilities,
+                        coin_type_probabilities = rules.coin_type_probabilities
+                        state_type_probabilities = (
+                            rules.coin_type_probabilities_by_occupied_count
+                        )
+                        if (
+                            occupied_count
+                            < state_type_probabilities.shape[0]
+                            and state_type_probabilities[occupied_count, 0]
+                            >= 0.0
+                        ):
+                            coin_type_probabilities = (
+                                state_type_probabilities[occupied_count]
+                            )
+                        coin_type = select_coin_type_for_feature(
+                            coin_type_probabilities,
                             rules.coin_types,
+                            feature_index,
+                            len(rules.bag_symbols),
                         )
                         position = row * num_reels + col
+                        occupied_count += 1
+                        for coin_type_index in range(len(rules.coin_types)):
+                            if coin_type != rules.coin_types[coin_type_index]:
+                                continue
+                            if rules.coin_type_respin_reset_flags[
+                                coin_type_index
+                            ]:
+                                landed_reset_positions[
+                                    num_landed_reset_symbols
+                                ] = position
+                                num_landed_reset_symbols += 1
+                            break
                         if coin_type == rules.coin_types[0]:
                             coin_val = probChoice(
                                 rules.coin_value_probabilities,
@@ -732,18 +896,18 @@ def hold_and_spin(
                         collector_meter,
                     )
 
-        natural_coin_landed = False
-        for idx in range(num_landed_coins):
-            if landed_coin_positions[idx] // num_reels > locked_row_idx:
-                natural_coin_landed = True
+        reset_symbol_landed = False
+        for idx in range(num_landed_reset_symbols):
+            if landed_reset_positions[idx] // num_reels > locked_row_idx:
+                reset_symbol_landed = True
                 break
 
-        if natural_coin_landed:
+        if reset_symbol_landed:
             remaining_spins = rules.respin_reset_count
         else:
             remaining_spins -= 1
         total_spins += 1
-        storage.finish_respin(remaining_spins, natural_coin_landed)
+        storage.finish_respin(remaining_spins, reset_symbol_landed)
 
         has_empty_unlocked_position = False
         for row in range(locked_row_idx + 1, num_rows):
@@ -757,11 +921,7 @@ def hold_and_spin(
         if not has_empty_unlocked_position:
             break
 
-    coin_win = 0
-    flattened_window = pay_window.ravel()
-    for position in range(len(coin_mask)):
-        if coin_mask[position]:
-            coin_win += flattened_window[position]
+    coin_win = active_coin_win(pay_window, coin_mask, locked_row_idx)
     storage.finish_session(
         float(coin_win + collector_meter),
         float(coin_win),

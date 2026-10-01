@@ -1,0 +1,123 @@
+{
+  "full_game": {
+    "rounds": 10000000,
+    "paid_spins": 11124765,
+    "seed": 20261014,
+    "total_rtp": 0.9398917106580001,
+    "target_total_rtp": 0.9402008490918528,
+    "base_rtp": 0.5528603594397606,
+    "target_base_rtp": 0.5517462399913647,
+    "base_line_rtp": 0.35136760880852913,
+    "base_collect_rtp": 0.2014927506333042,
+    "base_hit_rate": 0.2375475796567388,
+    "target_base_hit_rate": 0.23758546,
+    "feature_rtp": 0.37435118224625,
+    "target_feature_rtp": 0.3754137165425921,
+    "jackpot_rtp": 0.012680168974358865,
+    "target_jackpot_rtp": 0.013040892557895896,
+    "trigger_rate": 0.009983671565197107,
+    "target_trigger_rate": 0.01,
+    "features": [
+      {
+        "route": "Splitter",
+        "count": 15512,
+        "trigger_rate": 0.0013943665326863084,
+        "target_trigger_rate": 0.001392,
+        "rtp": 0.041212775636220604,
+        "average_win": 29.556629960719423
+      },
+      {
+        "route": "Grow",
+        "count": 15635,
+        "trigger_rate": 0.0014054229460127921,
+        "target_trigger_rate": 0.001392,
+        "rtp": 0.0489034302518138,
+        "average_win": 34.79623723986692
+      },
+      {
+        "route": "Boost",
+        "count": 15284,
+        "trigger_rate": 0.0013738717177396557,
+        "target_trigger_rate": 0.001392,
+        "rtp": 0.0337688350052466,
+        "average_win": 24.57932175851493
+      },
+      {
+        "route": "Multiplier",
+        "count": 15459,
+        "trigger_rate": 0.0013896023871066041,
+        "target_trigger_rate": 0.001392,
+        "rtp": 0.03934621163922866,
+        "average_win": 28.31472657524314
+      },
+      {
+        "route": "Collect",
+        "count": 15244,
+        "trigger_rate": 0.0013702761361700673,
+        "target_trigger_rate": 0.001392,
+        "rtp": 0.06065151566366335,
+        "average_win": 44.2622578491258
+      },
+      {
+        "route": "Expansion",
+        "count": 15567,
+        "trigger_rate": 0.0013993104573444923,
+        "target_trigger_rate": 0.001392,
+        "rtp": 0.07220051245944825,
+        "average_win": 51.59720781081351
+      },
+      {
+        "route": "Mega Combo",
+        "count": 4372,
+        "trigger_rate": 0.00039299706555599153,
+        "target_trigger_rate": 0.0004,
+        "rtp": 0.03310303658731703,
+        "average_win": 84.23227420409513
+      },
+      {
+        "route": "Plain",
+        "count": 13993,
+        "trigger_rate": 0.0012578243225811962,
+        "target_trigger_rate": 0.001248,
+        "rtp": 0.04516486500328311,
+        "average_win": 35.90713281056591
+      }
+    ],
+    "jackpots": [
+      {
+        "jackpot": "Mini",
+        "count": 19517,
+        "award_rate": 0.0017543741373413281,
+        "rtp": 0.007202704956015039,
+        "target_rtp": 0.00703751533863107,
+        "average_award": 4.105569503509896
+      },
+      {
+        "jackpot": "Minor",
+        "count": 1767,
+        "award_rate": 0.00015883481583655926,
+        "rtp": 0.003616750556079162,
+        "target_rtp": 0.00354982155325179,
+        "average_award": 22.770514997170345
+      },
+      {
+        "jackpot": "Major",
+        "count": 90,
+        "award_rate": 8.090058531573475e-06,
+        "rtp": 0.001860713462261899,
+        "target_rtp": 0.001852213908028074,
+        "average_award": 229.99999999999997
+      },
+      {
+        "jackpot": "Grand",
+        "count": 0,
+        "award_rate": 0.0,
+        "rtp": 0.0,
+        "target_rtp": 0.0006013417579849628,
+        "average_award": 0.0
+      }
+    ],
+    "feature_respins": 867561,
+    "hold_and_spin_steps": 1274374
+  }
+}

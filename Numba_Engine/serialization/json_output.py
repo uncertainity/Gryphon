@@ -1,10 +1,43 @@
 import json
 from pathlib import Path
 
+from ..core.reels import REEL_DICT
+
 
 JSON_LIBRARY_DIR = (
     Path(__file__).resolve().parents[1] / "output" / "json_library"
 )
+
+_HOLD_ROUTE_NAMES = (
+    "Splitter",
+    "Grow",
+    "Boost",
+    "Multiplier",
+    "Collect",
+    "Expansion",
+    "Mega Combo",
+    "Plain",
+)
+_HOLD_BAG_SYMBOLS = tuple(REEL_DICT[f"SC{index}"] for index in range(1, 7))
+
+
+def _hold_route_details(starting_symbols):
+    """Infer route name and logical rows from the valid starting state."""
+    distinct_symbols = set(int(symbol) for symbol in starting_symbols)
+    if not distinct_symbols:
+        return _HOLD_ROUTE_NAMES[7], 3
+    if distinct_symbols == set(_HOLD_BAG_SYMBOLS):
+        return _HOLD_ROUTE_NAMES[6], 6
+    if len(distinct_symbols) == 1:
+        symbol = next(iter(distinct_symbols))
+        if symbol in _HOLD_BAG_SYMBOLS:
+            feature_index = _HOLD_BAG_SYMBOLS.index(symbol)
+            return _HOLD_ROUTE_NAMES[feature_index], (
+                6 if feature_index == 5 else 3
+            )
+    return "Invalid partial combination", (
+        6 if REEL_DICT["SC6"] in distinct_symbols else 3
+    )
 
 
 def _step_to_dict(storage, step_index):
@@ -180,6 +213,18 @@ def hold_and_spin_storage_to_dict(storage):
     """Convert Hold-and-Spin session/respin/step storage."""
     sessions = []
     for session_index in range(int(storage.session_count)):
+        starting_count = int(
+            storage.session_starting_symbol_counts[session_index]
+        )
+        starting_symbols = storage.session_starting_symbols[
+            session_index, :starting_count
+        ].tolist()
+        feature_route, logical_board_rows = _hold_route_details(
+            starting_symbols
+        )
+        stored_board_rows = storage.boards.shape[1]
+        row_offset = stored_board_rows - logical_board_rows
+        num_reels = storage.boards.shape[2]
         respin_start = int(storage.session_respin_offsets[session_index])
         respin_end = int(storage.session_respin_offsets[session_index + 1])
         respins = []
@@ -188,21 +233,28 @@ def hold_and_spin_storage_to_dict(storage):
             step_end = int(storage.respin_step_offsets[respin_index + 1])
             steps = []
             for step_index in range(step_start, step_end):
+                feature_position = int(
+                    storage.feature_positions[step_index]
+                )
+                if feature_position >= 0:
+                    feature_position -= row_offset * num_reels
                 steps.append(
                     {
                         "step_index": step_index,
-                        "board": storage.boards[step_index].tolist(),
-                        "coin_mask": storage.coin_masks[step_index].tolist(),
+                        "board": storage.boards[
+                            step_index, row_offset:
+                        ].tolist(),
+                        "coin_mask": storage.coin_masks[
+                            step_index, row_offset:
+                        ].tolist(),
                         "feature_type": int(storage.feature_types[step_index]),
-                        "feature_position": int(
-                            storage.feature_positions[step_index]
-                        ),
+                        "feature_position": feature_position,
                         "remaining_spins": int(
                             storage.step_remaining_spins[step_index]
                         ),
                         "locked_row_index": int(
                             storage.step_locked_row_indices[step_index]
-                        ),
+                        ) - row_offset,
                         "collector_meter": int(
                             storage.step_collector_meters[step_index]
                         ),
@@ -219,9 +271,11 @@ def hold_and_spin_storage_to_dict(storage):
                         storage.respin_remaining_after[respin_index]
                     ),
                     "reset": bool(storage.respin_reset_flags[respin_index]),
-                    "jackpot_overlay_board": storage.respin_jackpot_overlay_boards[
-                        respin_index
-                    ].tolist(),
+                    "jackpot_overlay_board": (
+                        storage.respin_jackpot_overlay_boards[
+                            respin_index, row_offset:
+                        ].tolist()
+                    ),
                     "jackpot_meters_before": storage.respin_jackpot_meters_before[
                         respin_index
                     ].tolist(),
@@ -237,12 +291,12 @@ def hold_and_spin_storage_to_dict(storage):
                 }
             )
 
-        starting_count = int(
-            storage.session_starting_symbol_counts[session_index]
-        )
         sessions.append(
             {
                 "session_index": session_index,
+                "feature_route": feature_route,
+                "logical_board_shape": [logical_board_rows, num_reels],
+                "storage_board_shape": [stored_board_rows, num_reels],
                 "win": float(storage.session_wins[session_index]),
                 "coin_win": float(storage.session_coin_wins[session_index]),
                 "collector_win": float(
@@ -251,9 +305,7 @@ def hold_and_spin_storage_to_dict(storage):
                 "total_respins": int(
                     storage.session_total_respins[session_index]
                 ),
-                "starting_symbols": storage.session_starting_symbols[
-                    session_index, :starting_count
-                ].tolist(),
+                "starting_symbols": starting_symbols,
                 "jackpot_meters": storage.session_jackpot_meters[
                     session_index
                 ].tolist(),
@@ -276,8 +328,12 @@ def hold_and_spin_storage_to_dict(storage):
     }
 
 
-def full_game_storage_to_dict(full_storage, base_storage):
-    """Join routed full-game and base-game storage into a JSON payload."""
+def full_game_storage_to_dict(
+    full_storage,
+    base_storage,
+    hold_and_spin_storage=None,
+):
+    """Join full-game, base, and optional detailed H&S storage."""
     if int(full_storage.spin_count) != int(base_storage.spin_count):
         raise ValueError("Full-game and base-game spin counts do not match")
     if int(full_storage.round_count) != int(base_storage.round_count):
@@ -289,6 +345,16 @@ def full_game_storage_to_dict(full_storage, base_storage):
         for round_result in base_payload["rounds"]
         for spin in round_result["spins"]
     ]
+    feature_sessions = None
+    if hold_and_spin_storage is not None:
+        feature_payload = hold_and_spin_storage_to_dict(
+            hold_and_spin_storage
+        )
+        feature_sessions = feature_payload["sessions"]
+        if len(feature_sessions) != int(full_storage.feature_session_count):
+            raise ValueError(
+                "Full-game and Hold-and-Spin session counts do not match"
+            )
     feature_names = (
         "Splitter",
         "Grow",
@@ -297,6 +363,7 @@ def full_game_storage_to_dict(full_storage, base_storage):
         "Collect",
         "Expansion",
         "Mega Combo",
+        "Plain",
     )
     rounds = []
     for round_index in range(int(full_storage.round_count)):
@@ -304,6 +371,16 @@ def full_game_storage_to_dict(full_storage, base_storage):
         spin_end = int(full_storage.round_spin_offsets[round_index + 1])
         spins = []
         for spin_index in range(spin_start, spin_end):
+            session_index = int(
+                full_storage.spin_feature_session_indices[spin_index]
+            )
+            feature_session = None
+            if feature_sessions is not None and session_index >= 0:
+                if session_index >= len(feature_sessions):
+                    raise ValueError(
+                        "Invalid Hold-and-Spin session link in full game"
+                    )
+                feature_session = feature_sessions[session_index]
             feature_mask = int(full_storage.spin_feature_masks[spin_index])
             feature_routes = [
                 name
@@ -314,6 +391,8 @@ def full_game_storage_to_dict(full_storage, base_storage):
                 {
                     "spin_index": spin_index,
                     "base_spin": base_spins[spin_index],
+                    "feature_session_index": session_index,
+                    "feature_session": feature_session,
                     "feature_routes": feature_routes,
                     "base_win": float(full_storage.spin_base_wins[spin_index]),
                     "feature_win": float(
@@ -374,6 +453,16 @@ def full_game_storage_to_dict(full_storage, base_storage):
         "feature_trigger_counts": full_storage.feature_trigger_counts.tolist(),
         "feature_win_amounts": full_storage.feature_win_amounts.tolist(),
         "feature_spin_counts": full_storage.feature_spin_counts.tolist(),
+        "respin_count": (
+            int(hold_and_spin_storage.respin_count)
+            if hold_and_spin_storage is not None
+            else None
+        ),
+        "step_count": (
+            int(hold_and_spin_storage.step_count)
+            if hold_and_spin_storage is not None
+            else None
+        ),
         "rounds": rounds,
     }
 

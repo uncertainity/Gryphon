@@ -12,6 +12,8 @@ from Numba_Engine import (
     multiplier_bag,
 )
 from Numba_Engine.core.storage import HoldAndSpinStorage
+from Numba_Engine.core.hold_and_spin_kernels import active_coin_win
+from Numba_Engine.simulations.free_game import validate_hold_and_spin_config
 
 
 def _new_hold_and_spin_storage(config):
@@ -27,6 +29,43 @@ def _new_hold_and_spin_storage(config):
 
 def _certain(value, dtype=np.int16):
     return np.array([value], dtype=dtype), np.array([1.0])
+
+
+def test_locked_coin_values_pay_only_after_their_row_is_unlocked():
+    board = np.zeros((6, 5), dtype=np.int16)
+    coin_mask = np.zeros(30, dtype=np.bool_)
+    board[1, 0] = 10
+    board[3, 0] = 2
+    coin_mask[5] = True
+    coin_mask[15] = True
+
+    assert active_coin_win(board, coin_mask, locked_row_idx=2) == 2
+    assert active_coin_win(board, coin_mask, locked_row_idx=0) == 12
+
+
+def test_awarded_jackpot_weight_is_not_redistributed_to_rare_types():
+    config = HOLD_AND_SPIN_CONFIG._replace(
+        jackpot_token_probability=1.0,
+        jackpot_type_probabilities=np.array([0.999, 0.001, 0.0, 0.0]),
+        jackpot_collection_targets=np.full(4, 100, dtype=np.int16),
+        max_jackpot_tokens_per_respin=30,
+    )
+    board = np.ones((6, 5), dtype=np.int16)
+    positions = np.arange(30, dtype=np.int32)
+    meters = np.zeros(4, dtype=np.int16)
+    awarded = np.array([True, False, False, False])
+
+    collect_free_game_jackpot_tokens(
+        board,
+        positions,
+        locked_row_idx=-1,
+        rules=config,
+        jackpot_meters=meters,
+        awarded_jackpots=awarded,
+    )
+
+    # With redistribution, every one of these draws would become Minor.
+    assert meters[1] < 5
 
 
 def test_bag_probability_tables_favor_lower_rtp_outcomes():
@@ -255,3 +294,133 @@ def test_hold_and_spin_resolves_all_bags_in_configured_order():
     assert feature_counts[1] == 1
     assert feature_positions[1, 0] >= 0
     assert feature_counts.sum() == 1
+
+
+def test_expansion_uses_the_six_by_five_storage_and_unlocks_a_row():
+    config = HOLD_AND_SPIN_CONFIG._replace(
+        p_coin_locked=0.0,
+        p_coin_unlocked=0.0,
+        starting_coin_counts=np.array([1], dtype=np.int8),
+        starting_coin_count_probabilities=np.array([1.0]),
+    )
+    storage = _new_hold_and_spin_storage(config)
+
+    result = hold_and_spin(
+        np.array([config.expansion_symbol], dtype=np.int16),
+        config,
+        storage,
+    )
+
+    assert storage.session_count == 1
+    assert storage.boards.shape[1:] == (6, 5)
+    assert storage.step_locked_row_indices[0] == 2
+    assert result.locked_row_idx == 1
+    np.testing.assert_array_equal(
+        storage.session_starting_symbols[0, :1],
+        np.array([config.expansion_symbol]),
+    )
+
+
+def test_single_bag_route_cannot_land_a_different_bag_type():
+    probabilities = np.zeros(len(HOLD_AND_SPIN_CONFIG.coin_types))
+    probabilities[2] = 1.0
+    config = HOLD_AND_SPIN_CONFIG._replace(
+        p_coin_locked=0.0,
+        p_coin_unlocked=1.0,
+        coin_type_probabilities=probabilities,
+        starting_coin_counts=np.array([1], dtype=np.int8),
+        starting_coin_count_probabilities=np.array([1.0]),
+    )
+    storage = _new_hold_and_spin_storage(config)
+
+    result = hold_and_spin(
+        np.array([config.splitter_symbol], dtype=np.int16),
+        config,
+        storage,
+    )
+
+    assert storage.session_count == 1
+    assert result.total_spins == 1
+    assert not np.any(storage.feature_types[: storage.step_count] == 1)
+    assert np.count_nonzero(result.pay_window == config.grower_symbol) == 0
+
+
+def test_fixed_three_by_five_route_never_populates_padding_rows():
+    probabilities = np.zeros(len(HOLD_AND_SPIN_CONFIG.coin_types))
+    probabilities[0] = 1.0
+    config = HOLD_AND_SPIN_CONFIG._replace(
+        p_coin_locked=1.0,
+        p_coin_unlocked=1.0,
+        coin_type_probabilities=probabilities,
+        starting_coin_counts=np.array([1], dtype=np.int8),
+        starting_coin_count_probabilities=np.array([1.0]),
+    )
+    storage = _new_hold_and_spin_storage(config)
+
+    result = hold_and_spin(
+        np.array([config.splitter_symbol], dtype=np.int16),
+        config,
+        storage,
+    )
+
+    assert storage.boards.shape[1:] == (6, 5)
+    assert not np.any(result.pay_window[:3])
+    assert np.all(result.pay_window[3:] > 0)
+
+
+def test_partial_multi_bag_start_is_rejected_before_board_play():
+    config = HOLD_AND_SPIN_CONFIG
+
+    with np.testing.assert_raises_regex(ValueError, "plain, one Bag, or all"):
+        hold_and_spin(
+            np.array(
+                [config.splitter_symbol, config.grower_symbol],
+                dtype=np.int16,
+            ),
+            config,
+            _new_hold_and_spin_storage(config),
+        )
+
+
+def test_occupied_count_tables_override_only_the_configured_state():
+    unlocked_probabilities = (
+        HOLD_AND_SPIN_CONFIG.p_coin_unlocked_by_occupied_count.copy()
+    )
+    unlocked_probabilities[2] = 1.0
+    type_probabilities = (
+        HOLD_AND_SPIN_CONFIG.coin_type_probabilities_by_occupied_count.copy()
+    )
+    type_probabilities[2] = 0.0
+    type_probabilities[2, 0] = 1.0
+    config = HOLD_AND_SPIN_CONFIG._replace(
+        p_coin_locked=0.0,
+        p_coin_unlocked=0.0,
+        p_coin_unlocked_by_occupied_count=unlocked_probabilities,
+        coin_type_probabilities_by_occupied_count=type_probabilities,
+        starting_coin_counts=np.array([1], dtype=np.int8),
+        starting_coin_count_probabilities=np.array([1.0]),
+    )
+    validate_hold_and_spin_config(config)
+    storage = _new_hold_and_spin_storage(config)
+
+    result = hold_and_spin(
+        np.array([config.grower_symbol], dtype=np.int16),
+        config,
+        storage,
+    )
+
+    assert storage.respin_reset_flags[0]
+    assert result.total_spins == config.respin_reset_count + 1
+    assert np.count_nonzero(result.coin_mask) == 2
+
+
+def test_hold_and_spin_validation_rejects_malformed_state_tables():
+    invalid = HOLD_AND_SPIN_CONFIG._replace(
+        p_coin_unlocked_by_occupied_count=np.full(30, -1.0),
+    )
+
+    with np.testing.assert_raises_regex(
+        ValueError,
+        "one entry for every occupied-cell count",
+    ):
+        validate_hold_and_spin_config(invalid)

@@ -6,6 +6,8 @@ import sys
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, TextIO
 
+import numpy as np
+
 from ..core.reels import REEL_DICT
 
 if TYPE_CHECKING:
@@ -42,6 +44,7 @@ _ROUTED_FEATURE_NAMES = (
     "Collect",
     "Expansion",
     "Mega Combo",
+    "Plain",
 )
 
 
@@ -283,7 +286,10 @@ def _format_hold_and_spin_payload(payload, empty_marker):
             f"Session {session_position} | win: {_number(session['win'])} | "
             f"coins: {_number(session['coin_win'])} | "
             f"collector: {_number(session['collector_win'])} | "
-            f"starting features: {starting_symbols}"
+            f"route: {session['feature_route']} | "
+            f"grid: {session['logical_board_shape'][0]}x"
+            f"{session['logical_board_shape'][1]} | "
+            f"starting features: {starting_symbols or 'none'}"
         )
         final_meters = ", ".join(
             f"{_JACKPOT_NAMES.get(index, index)}={value}/3"
@@ -893,8 +899,20 @@ def format_full_game_statistics(statistics: FullGameStatistics):
         f"Bet per paid spin:         {stats.bet_per_spin:,.4f}",
         f"Total bet:                 {stats.total_bet:,.4f}",
         f"Total win:                 {stats.total_win:,.4f}",
-        f"Base win / RTP:            {stats.total_base_win:,.4f} / "
+        f"Base subtotal / RTP:       {stats.total_base_win:,.4f} / "
         f"{stats.base_rtp:.4%}",
+        (
+            f"  Payline win / RTP:       {stats.total_base_line_win:,.4f} / "
+            f"{stats.base_line_rtp:.4%}"
+            if np.isfinite(stats.total_base_line_win)
+            else "  Payline win / RTP:       unavailable (legacy archive)"
+        ),
+        (
+            f"  Base Collect / RTP:      {stats.total_base_collect_win:,.4f} / "
+            f"{stats.base_collect_rtp:.4%}"
+            if np.isfinite(stats.total_base_collect_win)
+            else "  Base Collect / RTP:      unavailable (legacy archive)"
+        ),
         f"Feature win / RTP:         {stats.total_feature_win:,.4f} / "
         f"{stats.feature_rtp:.4%}",
         f"Jackpot win / RTP:         {stats.total_jackpot_win:,.4f} / "
@@ -910,32 +928,51 @@ def format_full_game_statistics(statistics: FullGameStatistics):
         f"Return variance:           {stats.return_variance:,.6f}",
         f"Return standard deviation: {stats.return_standard_deviation:,.6f}",
     ]
-    if stats.feature_trigger_counts.any():
-        lines.extend(("", "FEATURE RESULTS BY TYPE"))
-        feature_rows = [
-            (
-                _ROUTED_FEATURE_NAMES[index],
-                f"{int(stats.feature_trigger_counts[index]):,}",
-                f"{int(stats.feature_spin_counts[index]):,}",
-                f"{stats.feature_win_amounts[index]:,.4f}",
-            )
-            for index in range(len(_ROUTED_FEATURE_NAMES))
-        ]
-        _table(
-            lines,
-            ("Feature", "Sessions", "Feature Spins", "Win"),
-            feature_rows,
+    lines.extend(("", "FEATURE RESULTS BY TYPE"))
+    feature_rows = [
+        (
+            _ROUTED_FEATURE_NAMES[index],
+            f"{int(stats.feature_trigger_counts[index]):,}",
+            f"{stats.feature_trigger_rates[index]:.5%}",
+            f"{int(stats.feature_spin_counts[index]):,}",
+            f"{stats.feature_average_spins[index]:,.3f}",
+            f"{stats.feature_average_wins[index]:,.4f}",
+            f"{stats.feature_win_amounts[index]:,.4f}",
+            f"{stats.feature_rtp_by_type[index]:.4%}",
         )
+        for index in range(len(_ROUTED_FEATURE_NAMES))
+    ]
+    _table(
+        lines,
+        (
+            "Feature",
+            "Sessions",
+            "Trigger Rate",
+            "Respins",
+            "Avg Respins",
+            "Avg Win",
+            "Win",
+            "RTP",
+        ),
+        feature_rows,
+    )
     lines.extend(("", "JACKPOT AWARDS BY TYPE"))
     rows = [
         (
             _JACKPOT_NAMES.get(index, f"Type {index}"),
             f"{int(count):,}",
+            f"{stats.jackpot_award_rates[index]:.6%}",
+            f"{stats.jackpot_average_awards[index]:,.4f}",
             f"{stats.jackpot_award_amounts[index]:,.4f}",
+            f"{stats.jackpot_rtp_by_type[index]:.4%}",
         )
         for index, count in enumerate(stats.jackpot_award_counts)
     ]
-    _table(lines, ("Jackpot", "Awards", "Amount"), rows)
+    _table(
+        lines,
+        ("Jackpot", "Awards", "Award Rate", "Avg Award", "Amount", "RTP"),
+        rows,
+    )
     lines.extend(("", "PAID-SPIN WIN HISTOGRAM (multiples of bet)"))
     rows = [
         (

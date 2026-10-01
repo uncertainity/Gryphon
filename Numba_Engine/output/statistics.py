@@ -228,10 +228,14 @@ class FullGameStatistics:
     total_bet: float
     total_win: float
     total_base_win: float
+    total_base_line_win: float
+    total_base_collect_win: float
     total_feature_win: float
     total_jackpot_win: float
     rtp: float
     base_rtp: float
+    base_line_rtp: float
+    base_collect_rtp: float
     feature_rtp: float
     jackpot_rtp: float
     maximum_spin_win: float
@@ -240,10 +244,17 @@ class FullGameStatistics:
     hit_rate: float
     feature_trigger_rate: float
     feature_trigger_counts: np.ndarray
+    feature_trigger_rates: np.ndarray
     feature_win_amounts: np.ndarray
+    feature_average_wins: np.ndarray
+    feature_rtp_by_type: np.ndarray
     feature_spin_counts: np.ndarray
+    feature_average_spins: np.ndarray
     jackpot_award_counts: np.ndarray
+    jackpot_award_rates: np.ndarray
     jackpot_award_amounts: np.ndarray
+    jackpot_average_awards: np.ndarray
+    jackpot_rtp_by_type: np.ndarray
     total_jackpot_award_count: int
     return_variance: float
     return_standard_deviation: float
@@ -816,8 +827,8 @@ def store_hold_and_spin(
         raise ValueError(
             "Coin and Collector wins do not reconcile with session wins"
         )
-    if np.any(session_starting_symbol_counts < 1):
-        raise ValueError("Every session must contain a starting Bag symbol")
+    if np.any(session_starting_symbol_counts < 0):
+        raise ValueError("Starting Bag symbol counts cannot be negative")
     if np.any((feature_types < -2) | (feature_types > 5)):
         raise ValueError("feature_types contains an unknown event code")
     if np.any(respin_jackpot_meters_before < 0) or np.any(
@@ -1009,9 +1020,15 @@ def store_full_game(
             )
         else:
             feature_masks = None
-            feature_trigger_counts = np.zeros(7, dtype=np.int64)
-            feature_win_amounts = np.zeros(7, dtype=np.float64)
-            feature_spin_counts = np.zeros(7, dtype=np.int64)
+            feature_trigger_counts = np.zeros(8, dtype=np.int64)
+            feature_win_amounts = np.zeros(8, dtype=np.float64)
+            feature_spin_counts = np.zeros(8, dtype=np.int64)
+        if "base_line_win_amount" in data and "base_collect_win_amount" in data:
+            total_base_line_win = float(data["base_line_win_amount"])
+            total_base_collect_win = float(data["base_collect_win_amount"])
+        else:
+            total_base_line_win = np.nan
+            total_base_collect_win = np.nan
 
     if spin_count < 1 or round_count < 1:
         raise ValueError("Full-game NPZ must contain spins and rounds")
@@ -1036,6 +1053,11 @@ def store_full_game(
         raise ValueError("Jackpot wins do not reconcile with jackpot awards")
     if not np.allclose(spin_total, spin_base + spin_feature + spin_jackpot):
         raise ValueError("Full-game spin components do not reconcile")
+    if np.isfinite(total_base_line_win) and not np.isclose(
+        total_base_line_win + total_base_collect_win,
+        spin_base.sum(dtype=np.float64),
+    ):
+        raise ValueError("Base line and Collect wins do not reconcile")
     if offsets.shape != (round_count + 1,) or offsets[0] != 0:
         raise ValueError("Full-game round offsets are invalid")
     if offsets[-1] != spin_count or np.any(np.diff(offsets) < 1):
@@ -1075,22 +1097,82 @@ def store_full_game(
     if feature_masks is not None:
         if feature_masks.shape != (spin_count,):
             raise ValueError("Full-game feature masks have an invalid shape")
+        # Archives produced before plain routing used seven categories.  Keep
+        # them readable by appending an empty Plain bucket.
+        if feature_trigger_counts.shape == (7,):
+            feature_trigger_counts = np.append(feature_trigger_counts, 0)
+            feature_win_amounts = np.append(feature_win_amounts, 0.0)
+            feature_spin_counts = np.append(feature_spin_counts, 0)
         if not (
             feature_trigger_counts.shape
             == feature_win_amounts.shape
             == feature_spin_counts.shape
-            == (7,)
+            == (8,)
         ):
             raise ValueError("Full-game feature aggregates have an invalid shape")
+        if np.any(feature_trigger_counts < 0):
+            raise ValueError("Feature trigger counts cannot be negative")
+        if np.any(feature_spin_counts < 0):
+            raise ValueError("Feature respin counts cannot be negative")
+        if np.any(feature_win_amounts < 0.0):
+            raise ValueError("Feature win amounts cannot be negative")
+        if np.any(feature_masks < 0) or np.any(feature_masks >= (1 << 8)):
+            raise ValueError("Full-game feature masks contain an unknown route")
+        triggered_mask = feature_masks != 0
+        if np.any((feature_masks[triggered_mask] & (feature_masks[triggered_mask] - 1)) != 0):
+            raise ValueError("A paid spin cannot contain multiple feature routes")
+        derived_trigger_counts = np.zeros(8, dtype=np.int64)
+        for feature_index in range(8):
+            derived_trigger_counts[feature_index] = np.count_nonzero(
+                feature_masks == (1 << feature_index)
+            )
+        if not np.array_equal(feature_trigger_counts, derived_trigger_counts):
+            raise ValueError("Feature trigger counts do not reconcile with spins")
+        linked_mask = feature_indices >= 0
+        if not np.array_equal(linked_mask, triggered_mask):
+            raise ValueError("Feature session links do not reconcile with triggers")
         feature_count = int(feature_trigger_counts.sum())
         feature_spin_count = int(np.count_nonzero(feature_masks))
+        if feature_count:
+            expected_indices = np.arange(feature_count, dtype=np.int64)
+            if not np.array_equal(feature_indices[linked_mask], expected_indices):
+                raise ValueError("Feature session links are not contiguous")
         if not np.isclose(feature_win_amounts.sum(), spin_feature.sum()):
             raise ValueError("Feature wins do not reconcile by feature type")
+        for feature_index in range(8):
+            route_win = spin_feature[feature_masks == (1 << feature_index)].sum(
+                dtype=np.float64
+            )
+            if not np.isclose(route_win, feature_win_amounts[feature_index]):
+                raise ValueError("Feature route wins do not reconcile with spins")
     else:
         feature_count = feature_spin_count
     hit_count = int(positive_wins.size)
+    feature_trigger_rates = feature_trigger_counts / spin_count
+    feature_average_wins = np.divide(
+        feature_win_amounts,
+        feature_trigger_counts,
+        out=np.zeros_like(feature_win_amounts, dtype=np.float64),
+        where=feature_trigger_counts > 0,
+    )
+    feature_rtp_by_type = feature_win_amounts / total_bet
+    feature_average_spins = np.divide(
+        feature_spin_counts,
+        feature_trigger_counts,
+        out=np.zeros_like(feature_spin_counts, dtype=np.float64),
+        where=feature_trigger_counts > 0,
+    )
     jackpot_award_counts = awards.sum(axis=0, dtype=np.int64)
     jackpot_award_amounts = award_amounts.sum(axis=0, dtype=np.float64)
+    jackpot_award_rates = jackpot_award_counts / spin_count
+    jackpot_average_awards = np.divide(
+        jackpot_award_amounts,
+        jackpot_award_counts,
+        out=np.zeros_like(jackpot_award_amounts, dtype=np.float64),
+        where=jackpot_award_counts > 0,
+    )
+    jackpot_rtp_by_type = jackpot_award_amounts / total_bet
+    total_base_win = float(spin_base.sum(dtype=np.float64))
     statistics = FullGameStatistics(
         source_path=source_path.resolve(),
         round_count=round_count,
@@ -1100,11 +1182,15 @@ def store_full_game(
         bet_per_spin=float(bet_per_spin),
         total_bet=total_bet,
         total_win=total_win,
-        total_base_win=float(spin_base.sum(dtype=np.float64)),
+        total_base_win=total_base_win,
+        total_base_line_win=total_base_line_win,
+        total_base_collect_win=total_base_collect_win,
         total_feature_win=float(spin_feature.sum(dtype=np.float64)),
         total_jackpot_win=float(spin_jackpot.sum(dtype=np.float64)),
         rtp=total_win / total_bet,
-        base_rtp=float(spin_base.sum(dtype=np.float64)) / total_bet,
+        base_rtp=total_base_win / total_bet,
+        base_line_rtp=total_base_line_win / total_bet,
+        base_collect_rtp=total_base_collect_win / total_bet,
         feature_rtp=float(spin_feature.sum(dtype=np.float64)) / total_bet,
         jackpot_rtp=float(spin_jackpot.sum(dtype=np.float64)) / total_bet,
         maximum_spin_win=float(spin_total.max()),
@@ -1113,10 +1199,17 @@ def store_full_game(
         hit_rate=hit_count / spin_count,
         feature_trigger_rate=feature_spin_count / spin_count,
         feature_trigger_counts=feature_trigger_counts,
+        feature_trigger_rates=feature_trigger_rates,
         feature_win_amounts=feature_win_amounts,
+        feature_average_wins=feature_average_wins,
+        feature_rtp_by_type=feature_rtp_by_type,
         feature_spin_counts=feature_spin_counts,
+        feature_average_spins=feature_average_spins,
         jackpot_award_counts=jackpot_award_counts,
+        jackpot_award_rates=jackpot_award_rates,
         jackpot_award_amounts=jackpot_award_amounts,
+        jackpot_average_awards=jackpot_average_awards,
+        jackpot_rtp_by_type=jackpot_rtp_by_type,
         total_jackpot_award_count=int(jackpot_award_counts.sum()),
         return_variance=float(np.var(normalized_wins)),
         return_standard_deviation=float(np.std(normalized_wins)),

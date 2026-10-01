@@ -1,95 +1,101 @@
-# Gryphon Base Math Tuning Summary
+# Gryphon current tuning summary
 
-Updated: 2026-09-28
+Updated: 2026-10-01
 
-## Targets
+## Engine boundary
 
-| Metric | Target |
+The integrated game remains fully inside the Numba engine framework. Runtime
+behavior is implemented by the existing base, routing, and shared
+Hold-and-Spin kernels. The files in this directory only load targets, construct
+candidate configuration values, collect production-kernel measurements, and
+report results. Neither tuning evaluator contains a replacement game flow.
+
+## Selected controls
+
+| Control | Selected value |
 |---|---:|
-| Base line win RTP | 35% |
-| Collect feature RTP | 20% |
-| Collect symbol frequency | 1 in 20 spins |
-| Overlay coins on window | 1-3 coins per spin |
-| Coin value average | approx. 1.2 |
-| Coin count when drop triggers | 2-6 coins |
-| Average coin count per Collect symbol | 4-6 coins |
-| Validation cycle | 10,000,000 spins |
+| Base reelset weights | 0.0472980782 / 0.9517882953 / 0.0009136265 |
+| Plain route relative weight | 0.1571597724 |
+| Single-Bag relative weights | 1 / 1 / 1 / 1 / 1 / 1 |
+| Base paytable scale | 2.0621263051 |
+| Base Coin-drop probabilities | 0.0868970066 / 0.1303455099 / 0.1882768476 |
+| Feature multipliers: Splitter / Grow / Boost / Multiplier | 1.923051683 / 1.331275802 / 1.558106375 / 1.506248630 |
+| Feature multipliers: Collect / Expansion / Mega / Plain | 2.679141934 / 2.689860064 / 0.600905123 / 3.155013434 |
+| Jackpot token probability | 0.6543931954 |
+| Jackpot type weights: Mini / Minor / Major / Grand | 0.6851984585 / 0.2279710187 / 0.0760905664 / 0.0107399564 |
 
-## Implemented Mechanics
+`ReelSet_3.csv` is the rare Mega-capable reelset. It is selected through the
+normal base reelset weights, produces a normal 3x5 base window, and then uses
+the same independent generic-SC conversion and all-six detection as every
+other base spin. There is no direct or tuning-only Mega launch.
 
-1. Base reel strips use a generic `SC` symbol only. `SC1`-`SC6` remain feature-only bag symbols and do not appear on base reel strips.
-2. Before each paid base spin, the game checks whether to drop overlay Coins.
-3. Coin-drop probability uses three buckets:
-   - `P1` when there are 0 Collect symbols on screen.
-   - `P2` when there is exactly 1 Collect symbol on screen.
-   - `P3` when there is more than 1 Collect symbol on screen.
-4. If a coin drop triggers, the game drops 2-6 overlay Coins by weighted count.
-5. Overlay Coins cannot land on Wild, Collect, existing Coin, or generic `SC` cells.
-6. Each visible Collect symbol independently collects the full overlay coin total.
-7. Reel 3 and reel 4 each contain a stack of 3 Collect symbols. Other reels use stack-2 and single Collect placements.
+## Route-frequency solve
 
-## Current Tuned Configuration
+The third reelset exposes 12 generic SCs. With equal SC1-SC6 conversion,
+the exact probability that all six distinct Bags appear is
+43.7815680621%. Its selected reel weight therefore gives the target 0.04%
+paid-spin Mega rate. The remaining reel weights solve the exact 1.00% total
+Hold-and-Spin rate. The Plain relative weight then solves 0.1248% Plain and
+0.1392% for each symmetric single-Bag route.
 
-| Area | Parameter | Current value |
-|---|---|---|
-| Reelsets | `ReelSet_1.csv`, `ReelSet_2.csv` | Generated identically from `Numba_Engine/Tuning/tune_base_reels.py` |
-| Reel length | all reels | `1000` |
-| Reelset weights | `BASE_GAME_CONFIG.reelset_probabilities` | `[0.50, 0.50]` |
-| Paytable | H1 | `(5OAK=10, 4OAK=3, 3OAK=1)` |
-| Paytable | H2 | `(5OAK=5, 4OAK=2, 3OAK=0.6)` |
-| Paytable | H3 | `(5OAK=4, 4OAK=1.6, 3OAK=0.4)` |
-| Paytable | H4/H5 | `(5OAK=3, 4OAK=1, 3OAK=0.4)` |
-| Paytable | L1-L6 | `(5OAK=2, 4OAK=0.6, 3OAK=0.2)` |
-| Coin-drop probabilities | `P1, P2, P3` | `[0.30, 0.45, 0.65]` |
-| Coin-drop count weights | counts `2, 3, 4, 5, 6` | `[0.08, 0.16, 0.34, 0.28, 0.14]` |
-| Coin values | value set | `[0.2, 0.3, 0.5, 0.8, 0.9, 1.0, 1.2, 1.5, 2.0, 2.5]` |
-| Coin value weights | probabilities | `[0.030, 0.040, 0.070, 0.100, 0.100, 0.150, 0.170, 0.170, 0.120, 0.050]` |
-| Coin value average | weighted average | `1.197x` |
+A 2,000,000-spin production-kernel route check measured 1.00335% total H&S
+and 0.03905% Mega, consistent with those exact probabilities.
 
-## 10M Validation
+## Conditional feature calibration
 
-Saved to `Numba_Engine/Tuning/latest_base_tuning.json`.
+The eight payout multipliers were fitted from 50,000 production H&S sessions
+per route and checked with an independent 50,000-session seed. Independent
+conditional means were:
 
-| Metric | Measured |
-|---|---:|
-| Spins | 10,000,000 |
-| Base line RTP | 35.1505% |
-| Collect RTP | 20.0754% |
-| Base total RTP | 55.2259% |
-| Collect window frequency | 5.2912%, approx. 1 in 18.9 |
-| Average Collect symbols on Collect spin | 1.3626 |
-| Coin-drop spin frequency | 31.1192% |
-| Average dropped coin count when triggered | 4.2390 |
-| Average overlay coin count per spin | 1.3191 |
-| Generic SC window frequency | 4.9083% |
+| Route | Observed mean | Target mean |
+|---|---:|---:|
+| Splitter | 29.7565x | 29.6087x |
+| Grow | 34.5636x | 34.7665x |
+| Boost | 24.7570x | 24.8021x |
+| Multiplier | 28.4181x | 28.4246x |
+| Collect | 44.4094x | 44.3604x |
+| Expansion | 51.6223x | 51.4483x |
+| Mega Combo | 84.4756x | 84.8922x |
+| Plain | 35.6293x | 35.5684x |
 
-## Reel Constraint Check
+Progressive awards are not multiplied by these values.
 
-The generated reelsets passed the following checks:
+## Integrated validation
 
-1. Every reel has at least one of every line-symbol kind.
-2. Reel 1 has no Wild symbol.
-3. No base reel contains `SC1`, `SC2`, `SC3`, `SC4`, `SC5`, or `SC6`.
-4. No base reel contains natural `COIN`; Coins are now overlay drops.
-5. Generic `SC` appears on the base reels.
-6. There is at least one symbol between any two generic `SC` symbols.
-7. There are at least two symbols between every Collect and generic `SC` symbol.
-8. Reel 3 and reel 4 each include a Collect stack of 3.
-9. Reels 1, 2, and 5 use stack-2/single Collect placements.
-10. Each reel can show up to 2 generic SC symbols in a 3-row window, so 6-8 scatters on a full 5-reel window is possible.
+The retained final run used 10,000,000 rounds, 11,124,765 paid spins, and seed
+`20261014`.
 
-## Verification
+| Metric | Observed | Target |
+|---|---:|---:|
+| Total RTP (no Grand observed) | 93.9892% | 94.0201% |
+| Total RTP plus modeled Grand contribution | 94.0493% | 94.0201% |
+| Base RTP | 55.2860% | 55.1746% |
+| Base hit rate | 23.7548% | 23.7585% |
+| Non-jackpot feature RTP | 37.4351% | 37.5414% |
+| Hold-and-Spin trigger rate | 0.9984% | 1.0000% |
+| Mini RTP | 0.7203% | 0.7038% |
+| Minor RTP | 0.3617% | 0.3550% |
+| Major RTP | 0.1861% | 0.1852% |
+| Grand RTP | 0 observed | 0.0601% modeled |
 
-`pytest` is not installed in this Python environment, so `python -m pytest -q` could not run.
+Grand is modeled at roughly one award per 38.25 million paid spins, so a
+10-million-round run normally contains zero or one and cannot certify its RTP
+by ordinary sampling. `tune_jackpots.py` evaluates its three-token collection
+probability over production-generated per-respin opportunity profiles instead.
 
-The existing pytest-style test functions were imported and called directly; they passed:
+## Reproduction
 
-```text
-manual pytest-style tests passed
+```bash
+python -m Numba_Engine.Tuning.evaluate --routing-only --routing-spins 2m --seed 20261001
+python -m Numba_Engine.Tuning.evaluate --features-only --feature-sessions 50k --seed 20261007
+python -m Numba_Engine.Tuning.tune_jackpots --sessions-per-route 20k --seed 20261013
+python -m Numba_Engine.Tuning.evaluate --full-only --full-rounds 10m --seed 20261014
 ```
 
-## Remaining Notes
+Final machine-readable evidence is retained in:
 
-1. The line and Collect targets are close on the 10M sample. For final certification, run an independent larger validation seed.
-2. Generic `SC` currently acts as the base trigger symbol. The later conversion from `SC` to `SC1`-`SC6` by weights still needs an explicit selection layer when the feature is launched from base game.
-3. The Hold-and-Spin launch path is still not wired directly into `base_game.py`; this pass focused on base reel/line/Collect math.
+- `results/routing_2m.json`
+- `results/base_tuned_10m.json`
+- `results/features_tuned_50k.json`
+- `results/jackpot_opportunity_tuning.json`
+- `results/full_tuned_10m.json`

@@ -8,6 +8,7 @@ from Numba_Engine import (
     FEATURE_CONFIGS,
     FEATURE_COIN_VALUE_PROBABILITIES,
     FEATURE_COIN_VALUES,
+    FEATURE_RTP_CONFIG,
     GROW_FEATURE_CONFIG,
     GROW_VALUE_PROBABILITIES,
     GROW_VALUES,
@@ -25,7 +26,6 @@ from Numba_Engine import (
     run_splitter_feature,
 )
 from Numba_Engine.simulations.base_game import convert_base_scatters
-from Numba_Engine.simulations.free_game import run_configured_features
 
 
 def test_feature_settings_are_routed_through_full_game_config():
@@ -79,21 +79,16 @@ def test_base_scatter_converts_to_weighted_feature_symbol():
     assert not combo_triggered
 
 
-def test_sc7_does_not_bypass_the_combo_requirements():
-    board = np.full((3, 5), REEL_DICT["H1"], dtype=np.int16)
-    board[0, 0] = REEL_DICT["SC7"]
-    flags = np.zeros(7, dtype=np.bool_)
-    flags[6] = True
-
-    routed = run_configured_features(
-        board,
-        flags,
-        combo_triggered=False,
-        config=FULL_GAME_CONFIG,
-        random_generator=np.random.default_rng(7),
+def test_base_conversion_contains_exactly_the_six_bags():
+    np.testing.assert_array_equal(
+        BASE_GAME_CONFIG.scatter_feature_symbols,
+        FULL_GAME_CONFIG.hold_and_spin.bag_symbols,
     )
-
-    assert routed == []
+    assert len(BASE_GAME_CONFIG.scatter_feature_symbols) == 6
+    assert np.isclose(
+        BASE_GAME_CONFIG.scatter_feature_symbol_probabilities.sum(),
+        1.0,
+    )
 
 
 def test_all_six_converted_scatters_always_launch_combo():
@@ -123,6 +118,23 @@ def test_feature_payout_multiplier_is_supplied_by_configuration():
     unscaled = run_expansion_feature(seed=91, payout_multiplier=1.0)
     scaled = run_expansion_feature(seed=91, payout_multiplier=2.0)
     assert np.isclose(scaled.total_win, unscaled.total_win * 2.0)
+
+
+def test_integrated_hold_and_spin_has_one_multiplier_per_reporting_category():
+    multipliers = FEATURE_RTP_CONFIG.hold_and_spin_payout_multipliers
+    assert multipliers.shape == (8,)
+    assert np.all(np.isfinite(multipliers))
+    assert np.all(multipliers > 0.0)
+
+
+def test_integrated_route_probability_budget_sums_to_overall_target():
+    probabilities = FEATURE_RTP_CONFIG
+    assert np.isclose(
+        probabilities.plain_feature_probability
+        + 6 * probabilities.single_feature_probability
+        + probabilities.mega_feature_probability,
+        probabilities.overall_feature_probability,
+    )
 
 
 def test_expansion_feature_respects_go_limits_and_grid_shape():

@@ -613,6 +613,8 @@ active_full_game_storage_spec = [
     ("feature_trigger_counts", int64[:]),
     ("feature_win_amounts", float64[:]),
     ("feature_spin_counts", int64[:]),
+    ("base_line_win_amount", float64),
+    ("base_collect_win_amount", float64),
     ("round_spin_offsets", int64[:]),
     ("round_base_wins", float64[:]),
     ("round_feature_wins", float64[:]),
@@ -626,9 +628,10 @@ active_full_game_storage_spec = [
 
 @jitclass(active_full_game_storage_spec)
 class FullGameStorage:
-    """Full-game storage for the seven configured feature routes.
+    """Full-game storage for routed Hold-and-Spin session categories.
 
-    Feature detail is aggregated by route to keep long simulations compact.
+    Feature detail is aggregated by starting-Bag category to keep long
+    simulations compact. Detailed board history lives in HoldAndSpinStorage.
     """
 
     def __init__(
@@ -636,7 +639,7 @@ class FullGameStorage:
         spin_capacity,
         round_capacity,
         num_jackpots,
-        num_feature_types=7,
+        num_feature_types=8,
     ):
         if spin_capacity < 1 or round_capacity < 1:
             raise ValueError("Full-game capacities must be positive")
@@ -673,6 +676,8 @@ class FullGameStorage:
         self.feature_spin_counts = np.zeros(
             num_feature_types, dtype=np.int64
         )
+        self.base_line_win_amount = 0.0
+        self.base_collect_win_amount = 0.0
 
         self.round_spin_offsets = np.empty(round_capacity + 1, dtype=np.int64)
         self.round_base_wins = np.empty(round_capacity, dtype=np.float64)
@@ -751,6 +756,8 @@ class FullGameStorage:
         feature_wins_by_type,
         feature_spins_by_type,
         base_win,
+        line_win,
+        collect_win,
         jackpot_win,
         jackpot_values_before_feature,
         jackpot_awards,
@@ -760,14 +767,35 @@ class FullGameStorage:
         if self.spin_count == self.spin_base_wins.shape[0]:
             self._grow_spins()
 
-        if feature_trigger_counts.shape != self.feature_trigger_counts.shape:
+        expected_shape = self.feature_trigger_counts.shape
+        if feature_trigger_counts.shape != expected_shape:
             raise ValueError("Feature trigger counts have an invalid shape")
+        if feature_wins_by_type.shape != expected_shape:
+            raise ValueError("Feature wins have an invalid shape")
+        if feature_spins_by_type.shape != expected_shape:
+            raise ValueError("Feature respin counts have an invalid shape")
 
         feature_count = int(feature_trigger_counts.sum())
+        if feature_count < 0 or feature_count > 1:
+            raise ValueError("A paid spin can launch at most one feature session")
         feature_mask = 0
         for feature_index, count in enumerate(feature_trigger_counts):
+            if count < 0 or count > 1:
+                raise ValueError("Feature trigger entries must be zero or one")
+            if feature_wins_by_type[feature_index] < 0.0:
+                raise ValueError("Feature wins cannot be negative")
+            if feature_spins_by_type[feature_index] < 0:
+                raise ValueError("Feature respin counts cannot be negative")
+            if count == 0 and (
+                feature_wins_by_type[feature_index] != 0.0
+                or feature_spins_by_type[feature_index] != 0
+            ):
+                raise ValueError("Untriggered features cannot record results")
             if count:
                 feature_mask |= 1 << feature_index
+
+        if not np.isclose(base_win, line_win + collect_win):
+            raise ValueError("Base win must equal line win plus Collect win")
 
         index = self.spin_count
         if feature_count:
@@ -792,6 +820,8 @@ class FullGameStorage:
         self.feature_trigger_counts += feature_trigger_counts
         self.feature_win_amounts += feature_wins_by_type
         self.feature_spin_counts += feature_spins_by_type
+        self.base_line_win_amount += line_win
+        self.base_collect_win_amount += collect_win
         self.feature_session_count += feature_count
         self.spin_count += 1
 
@@ -1494,6 +1524,14 @@ def write_full_game_npz(storage, filename, overwrite=False):
                 "feature_trigger_counts": storage.feature_trigger_counts,
                 "feature_win_amounts": storage.feature_win_amounts,
                 "feature_spin_counts": storage.feature_spin_counts,
+                "base_line_win_amount": np.array(
+                    storage.base_line_win_amount,
+                    dtype=np.float64,
+                ),
+                "base_collect_win_amount": np.array(
+                    storage.base_collect_win_amount,
+                    dtype=np.float64,
+                ),
             }
         )
     return _write_payload(payload, filename, overwrite)

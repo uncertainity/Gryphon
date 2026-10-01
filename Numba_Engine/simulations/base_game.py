@@ -7,7 +7,6 @@ from numba.typed import List
 from ..core.config import (
     BASE_GAME_CONFIG,
     BASE_JACKPOT_OVERLAY_CONFIG,
-    BASE_PAY_TABLE,
     JACKPOT_CONFIG,
     PAY_LINES,
 )
@@ -154,8 +153,6 @@ def convert_base_scatters(pay_window, rules):
         combo_triggered = (
             np.random.uniform(0.0, 1.0) < rules.combo_feature_probability
         )
-        if combo_triggered:
-            feature_flags[-1] = True
     return converted_window, feature_flags, combo_triggered
 
 
@@ -210,7 +207,7 @@ def _run_one_paid_spin_with_features(
         symbol_win_amounts,
     ) = line_win_eval(
         pay_window,
-        BASE_PAY_TABLE,
+        rules.pay_table,
         PAY_LINES,
         rules.wild_symbol,
     )
@@ -269,6 +266,8 @@ def _run_one_paid_spin_with_features(
         display_window,
         feature_flags,
         combo_triggered,
+        line_win,
+        collect_win,
     )
 
 
@@ -289,6 +288,8 @@ def run_one_paid_spin(
         feature_triggered,
         collector_count,
         pay_window,
+        _,
+        _,
         _,
         _,
     ) = _run_one_paid_spin_with_features(

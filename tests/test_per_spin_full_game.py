@@ -16,6 +16,7 @@ def test_full_game_session_preserves_then_resets_jackpot_values(monkeypatch):
             (),
             None,
             None,
+            None,
             jackpot_values,
             {"storage_type": "full_game"},
             None,

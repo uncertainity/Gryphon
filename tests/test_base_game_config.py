@@ -8,7 +8,7 @@ from Numba_Engine import (
 )
 
 
-def test_base_coin_credit_table_is_normalized_and_targets_average_value():
+def test_base_coin_credit_table_is_normalized_and_targets_tuned_average_value():
     rules = BASE_GAME_CONFIG
 
     assert len(rules.coin_credit_values) == len(
@@ -16,22 +16,25 @@ def test_base_coin_credit_table_is_normalized_and_targets_average_value():
     )
     assert np.all(np.diff(rules.coin_credit_values) > 0)
     assert np.isclose(rules.coin_credit_value_probabilities.sum(), 1.0)
-    assert 1.15 <= np.dot(
-        rules.coin_credit_values,
-        rules.coin_credit_value_probabilities,
-    ) <= 1.25
+    assert np.isclose(
+        np.dot(
+            rules.coin_credit_values,
+            rules.coin_credit_value_probabilities,
+        ),
+        1.4132084363668658,
+    )
 
 
-def test_base_reel_collection_loads_both_reelsets_with_configured_weights():
+def test_base_reel_collection_loads_all_reelsets_with_configured_weights():
     reels = make_reel_collection(
         BASE_GAME_CONFIG.reelset_path,
         BASE_GAME_CONFIG,
     )
 
-    assert reels.reelsets.shape[0] == 2
+    assert reels.reelsets.shape[0] == 3
     np.testing.assert_allclose(
         reels.weights,
-        np.array([0.50, 0.50]),
+        BASE_GAME_CONFIG.reelset_probabilities,
     )
     assert np.any(reels.reelsets == BASE_GAME_CONFIG.sc_symbol)
     for scatter_symbol in (
@@ -41,14 +44,13 @@ def test_base_reel_collection_loads_both_reelsets_with_configured_weights():
         REEL_DICT["SC4"],
         REEL_DICT["SC5"],
         REEL_DICT["SC6"],
-        REEL_DICT["SC7"],
     ):
         assert not np.any(reels.reelsets == scatter_symbol)
 
     assert not np.any(reels.reelsets == BASE_GAME_CONFIG.coin_symbol)
 
-    reelset_trigger_probabilities = np.zeros(2)
-    for reelset_index in range(2):
+    reelset_trigger_probabilities = np.zeros(reels.reelsets.shape[0])
+    for reelset_index in range(reels.reelsets.shape[0]):
         no_sc_probability = 1.0
         for reel in range(BASE_GAME_CONFIG.num_reels):
             reel_length = reels.lengths[reelset_index, reel]
@@ -69,7 +71,19 @@ def test_base_reel_collection_loads_both_reelsets_with_configured_weights():
         reels.weights,
         reelset_trigger_probabilities,
     )
-    assert 0.045 <= combined_trigger_probability <= 0.055
+    assert np.isclose(combined_trigger_probability, 0.01)
+
+    # Every ReelSet_3 stop exposes twelve generic SCs.  Mega is therefore
+    # reachable through ordinary base-reel generation and independent SC
+    # conversion, rather than through a tuning-only launch shortcut.
+    for reel in range(4):
+        length = reels.lengths[2, reel]
+        strip = reels.reelsets[2, :length, reel]
+        for stop in range(length):
+            visible = np.array(
+                [strip[(stop + row) % length] for row in range(3)]
+            )
+            assert np.all(visible == BASE_GAME_CONFIG.sc_symbol)
 
 
 def test_only_generic_sc_triggers_conversion_from_the_base_game():

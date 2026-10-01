@@ -1,0 +1,83 @@
+{
+  "sessions_per_route": 20000,
+  "seed": 20261013,
+  "token_probability": 0.6543931953734153,
+  "type_probabilities": [
+    0.6851984585432973,
+    0.22797101868246214,
+    0.07609056639814987,
+    0.010739956376090593
+  ],
+  "average_award_assumptions": [
+    4.1,
+    22.7,
+    230.0,
+    23000.0
+  ],
+  "target_paid_award_rates": [
+    0.0017164671557636756,
+    0.00015637980410800837,
+    8.053103947948148e-06,
+    2.6145293825433165e-08
+  ],
+  "predicted_paid_award_rates": [
+    0.0017164671557636842,
+    0.00015637980410800715,
+    8.053103947948287e-06,
+    2.6145293824748114e-08
+  ],
+  "predicted_rtps": [
+    0.007037515338631104,
+    0.0035498215532517624,
+    0.0018522139080281062,
+    0.0006013417579692066
+  ],
+  "optimization_success": true,
+  "optimization_cost": 3.4326493041186444e-22,
+  "opportunity_profiles": {
+    "unique_weighted_profiles": 26503,
+    "weight_sum": 1.0,
+    "routes": {
+      "Splitter": {
+        "sessions": 20000,
+        "unique_profiles": 3001,
+        "average_opportunities": 2.2744
+      },
+      "Grow": {
+        "sessions": 20000,
+        "unique_profiles": 4196,
+        "average_opportunities": 2.7643
+      },
+      "Boost": {
+        "sessions": 20000,
+        "unique_profiles": 5025,
+        "average_opportunities": 3.0919
+      },
+      "Multiplier": {
+        "sessions": 20000,
+        "unique_profiles": 4978,
+        "average_opportunities": 3.08425
+      },
+      "Collect": {
+        "sessions": 20000,
+        "unique_profiles": 5101,
+        "average_opportunities": 3.1383
+      },
+      "Expansion": {
+        "sessions": 20000,
+        "unique_profiles": 8978,
+        "average_opportunities": 4.8257
+      },
+      "Mega Combo": {
+        "sessions": 20000,
+        "unique_profiles": 4973,
+        "average_opportunities": 2.94445
+      },
+      "Plain": {
+        "sessions": 20000,
+        "unique_profiles": 5313,
+        "average_opportunities": 3.59365
+      }
+    }
+  }
+}
